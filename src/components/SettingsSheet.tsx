@@ -55,10 +55,11 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarUrl, setCalendarUrl] = useState('');
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
-    const { firstName, logout, convexUser, loginStandalone } = useTelegram();
+    const { firstName, logout, convexUser, onAuth } = useTelegram();
     const updateNameMutation = useMutation(api.users.updateName);
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
+    const [customUserId, setCustomUserId] = useState('');
 
     const handleSaveName = async () => {
         if (!tempName.trim() || !convexUser?._id) return;
@@ -306,15 +307,32 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
             )}
 
             {minimal && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.')) && (
-                <button
-                    onClick={() => {
-                        loginStandalone();
-                        onClose();
-                    }}
-                    className="w-full p-4 mt-8 rounded-2xl bg-ios-background dark:bg-zinc-800 text-ios-gray/40 hover:text-ios-blue text-xs font-medium transition-colors"
-                >
-                    {t('login_with_mock') || 'Login as Dev'}
-                </button>
+                <div className="mt-8 space-y-2">
+                    <p className="text-xs text-center text-ios-gray">Developer Login</p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="User ID (default: 129516266)"
+                            value={customUserId}
+                            onChange={(e) => setCustomUserId(e.target.value)}
+                            className="flex-1 px-4 py-3 bg-ios-background dark:bg-zinc-800 rounded-xl text-sm dark:text-white"
+                        />
+                        <button
+                            onClick={() => {
+                                const id = parseInt(customUserId) || 129516266;
+                                onAuth({
+                                    id,
+                                    first_name: "Dev User",
+                                    username: "dev_user_" + id
+                                });
+                                onClose();
+                            }}
+                            className="px-4 py-3 bg-ios-blue text-white font-medium rounded-xl text-sm"
+                        >
+                            Login
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

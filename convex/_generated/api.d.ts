@@ -12,6 +12,7 @@ import type * as attendance from "../attendance.js";
 import type * as calendars from "../calendars.js";
 import type * as groups from "../groups.js";
 import type * as lessons from "../lessons.js";
+import type * as migrations_copy_groups_schedules from "../migrations/copy_groups_schedules.js";
 import type * as migrations_transfer_user_data from "../migrations/transfer_user_data.js";
 import type * as pass_groups from "../pass_groups.js";
 import type * as passes from "../passes.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   calendars: typeof calendars;
   groups: typeof groups;
   lessons: typeof lessons;
+  "migrations/copy_groups_schedules": typeof migrations_copy_groups_schedules;
   "migrations/transfer_user_data": typeof migrations_transfer_user_data;
   pass_groups: typeof pass_groups;
   passes: typeof passes;
