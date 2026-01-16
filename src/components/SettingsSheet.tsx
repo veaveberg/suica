@@ -25,8 +25,11 @@ interface SettingsSheetProps {
 }
 
 const CALENDAR_COLORS = [
-    '#8E8E93', '#A2845E', '#6B7280', '#7C9885', '#9CA3AF',
-    '#B39DDB', '#90A4AE', '#A1887F', '#80CBC4', '#BCAAA4',
+    '#FF3B30', '#FF9500', '#FFCC00', '#4CD964', '#5AC8FA', '#007AFF', '#5856D6', '#AF52DE', '#FF2D55', // iOS System Colors
+    '#A2845E', '#8E8E93', '#28CD41', '#00C7BE', '#30B0C7', '#32ADE6', '#0071A4', // More Vibrants
+    '#FF6B22', '#F8CA00', '#2DCC70', '#E74C3C', '#8E44AD', '#34495E', // Flat Colors
+    '#F06292', '#BA68C8', '#9575CD', '#7986CB', '#64B5F6', '#4FC3F7', '#4DB6AC', '#81C784', // Pastels
+    '#7C9885', '#BCAAA4', // Muted
 ];
 
 export const SettingsSheet: React.FC<SettingsSheetProps> = ({
