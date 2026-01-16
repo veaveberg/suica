@@ -1,4 +1,3 @@
-import { Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TelegramLoginWidget } from './TelegramLoginWidget';
 
@@ -38,30 +37,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, i
                             onAuth={onTelegramAuth}
                             className="w-full flex justify-center"
                         />
-
-                        <div className="flex items-center gap-2 text-white/40 text-[10px] uppercase font-bold tracking-widest py-2">
-                            <div className="h-[1px] w-8 bg-white/10" />
-                            <span>or developer mode</span>
-                            <div className="h-[1px] w-8 bg-white/10" />
-                        </div>
-
-                        <button
-                            onClick={onLogin}
-                            disabled={isLoading}
-                            className="w-full text-white/60 hover:text-white text-sm font-semibold transition-colors"
-                        >
-                            {t('login_with_mock') || 'Continue as Dev Admin'}
-                        </button>
-                    </div>
-
-                    <div className="p-4 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 space-y-2 text-left">
-                        <div className="flex items-center gap-2 text-ios-blue text-xs font-bold uppercase tracking-wider">
-                            <Info className="w-3 h-3" />
-                            <span>Setup Required</span>
-                        </div>
-                        <p className="text-[11px] text-white/60 leading-relaxed">
-                            To use the real login, ensure <strong>@suica_ekabot</strong> has its domain set to your GitHub Pages URL via @BotFather.
-                        </p>
                     </div>
 
                     <p className="text-xs text-white/50">
