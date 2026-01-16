@@ -32,14 +32,6 @@ function App() {
     );
   }
 
-  if (!convexUser) {
-    return <LoginPage onLogin={loginStandalone} onTelegramAuth={onAuth} />;
-  }
-
-  if (convexUser?.role === 'student') {
-    return <StudentPortal />
-  }
-
   // Initialize theme from localStorage or 'auto'
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>(() => {
     return (localStorage.getItem('theme-mode') as 'auto' | 'light' | 'dark') || 'auto'
@@ -78,6 +70,26 @@ function App() {
   const changeThemeMode = (mode: 'auto' | 'light' | 'dark') => {
     setThemeMode(mode)
     localStorage.setItem('theme-mode', mode)
+  }
+
+  const changeLanguage = (lang: Language) => {
+    i18n.changeLanguage(lang)
+  }
+
+  if (!convexUser) {
+    return (
+      <LoginPage
+        onTelegramAuth={onAuth}
+        isDark={isDark}
+        themeMode={themeMode}
+        onChangeThemeMode={changeThemeMode}
+        onChangeLanguage={changeLanguage}
+      />
+    );
+  }
+
+  if (convexUser?.role === 'student') {
+    return <StudentPortal />
   }
 
   const { students, lessons, subscriptions, refreshLessons } = useData()

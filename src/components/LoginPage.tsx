@@ -1,17 +1,39 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TelegramLoginWidget } from './TelegramLoginWidget';
+import { SettingsSheet } from './SettingsSheet';
+
+import { Settings } from 'lucide-react';
 
 interface LoginPageProps {
-    onLogin: () => void;
     onTelegramAuth: (user: any) => void;
-    isLoading?: boolean;
+    // Settings props
+    isDark: boolean;
+    themeMode: 'auto' | 'light' | 'dark';
+    onChangeThemeMode: (mode: 'auto' | 'light' | 'dark') => void;
+    onChangeLanguage: (lang: any) => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, isLoading }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({
+    onTelegramAuth,
+    isDark,
+    themeMode,
+    onChangeThemeMode,
+    onChangeLanguage
+}) => {
     const { t } = useTranslation();
+    const [showSettings, setShowSettings] = useState(false);
 
     return (
         <div className="min-h-screen relative flex flex-col items-center justify-center p-6 text-center overflow-hidden bg-black">
+            {/* Settings Button */}
+            <button
+                onClick={() => setShowSettings(true)}
+                className="absolute top-4 right-4 z-50 p-2 text-white/50 hover:text-white transition-colors bg-white/5 rounded-full backdrop-blur-md"
+            >
+                <Settings className="w-5 h-5" />
+            </button>
+
             {/* Background Image */}
             <div className="absolute inset-0 z-0">
                 <img
@@ -44,6 +66,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, i
                     </p>
                 </div>
             </div>
+
+            <SettingsSheet
+                isOpen={showSettings}
+                onClose={() => setShowSettings(false)}
+                isDark={isDark}
+                themeMode={themeMode}
+                onChangeThemeMode={onChangeThemeMode}
+                onChangeLanguage={onChangeLanguage}
+                minimal={true}
+            />
         </div>
     );
 };

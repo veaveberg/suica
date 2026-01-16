@@ -21,7 +21,9 @@ interface SettingsSheetProps {
     themeMode: 'auto' | 'light' | 'dark';
     onChangeThemeMode: (mode: 'auto' | 'light' | 'dark') => void;
     onChangeLanguage: (lang: Language) => void;
+    onChangeLanguage: (lang: Language) => void;
     onCalendarsChange?: () => void;
+    minimal?: boolean;
 }
 
 const CALENDAR_COLORS = [
@@ -35,7 +37,10 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     themeMode,
     onChangeThemeMode,
     onChangeLanguage,
-    onCalendarsChange
+    onChangeThemeMode,
+    onChangeLanguage,
+    onCalendarsChange,
+    minimal = false
 }) => {
     const { t, i18n } = useTranslation();
     const [confirmClear, setConfirmClear] = useState(false);
@@ -176,24 +181,26 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const renderMainSettings = () => (
         <div className="space-y-6">
             {/* User Info & Logout */}
-            <div className="flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-ios-blue/10 rounded-full flex items-center justify-center">
-                        <span className="text-ios-blue font-bold">{firstName?.[0] || 'U'}</span>
+            {!minimal && (
+                <div className="flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-ios-blue/10 rounded-full flex items-center justify-center">
+                            <span className="text-ios-blue font-bold">{firstName?.[0] || 'U'}</span>
+                        </div>
+                        <div>
+                            <span className="font-medium dark:text-white">{firstName || t('user')}</span>
+                            <p className="text-xs text-ios-gray">{t('logged_in_via_telegram') || 'Logged in via Telegram'}</p>
+                        </div>
                     </div>
-                    <div>
-                        <span className="font-medium dark:text-white">{firstName || t('user')}</span>
-                        <p className="text-xs text-ios-gray">{t('logged_in_via_telegram') || 'Logged in via Telegram'}</p>
-                    </div>
+                    <button
+                        onClick={logout}
+                        className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors"
+                        title={t('logout')}
+                    >
+                        <LogOut className="w-5 h-5" />
+                    </button>
                 </div>
-                <button
-                    onClick={logout}
-                    className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors"
-                    title={t('logout')}
-                >
-                    <LogOut className="w-5 h-5" />
-                </button>
-            </div>
+            )}
 
             <div className="space-y-3">
                 <div className="flex items-center gap-3 px-1 text-ios-gray">
@@ -227,32 +234,36 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                 />
             </div>
 
-            <button
-                onClick={() => setShowCalendars(true)}
-                className="w-full flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
-            >
-                <div className="flex items-center gap-3">
-                    <Calendar className="w-5 h-5 text-ios-blue" />
-                    <div>
-                        <span className="font-medium dark:text-white">{t('external_calendars')}</span>
-                        <p className="text-xs text-ios-gray">
-                            {calendars.length === 0
-                                ? t('no_calendars')
-                                : `${calendars.filter(c => c.enabled).length} ${t('enabled')}`
-                            }
-                        </p>
-                    </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-ios-gray/30" />
-            </button>
+            {!minimal && (
+                <>
+                    <button
+                        onClick={() => setShowCalendars(true)}
+                        className="w-full flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Calendar className="w-5 h-5 text-ios-blue" />
+                            <div>
+                                <span className="font-medium dark:text-white">{t('external_calendars')}</span>
+                                <p className="text-xs text-ios-gray">
+                                    {calendars.length === 0
+                                        ? t('no_calendars')
+                                        : `${calendars.filter(c => c.enabled).length} ${t('enabled')}`
+                                    }
+                                </p>
+                            </div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-ios-gray/30" />
+                    </button>
 
-            <button
-                onClick={() => setShowDangerZone(true)}
-                className="w-full flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
-            >
-                <span className="font-medium text-ios-red">{t('danger_zone')}</span>
-                <ChevronRight className="w-5 h-5 text-ios-gray/30" />
-            </button>
+                    <button
+                        onClick={() => setShowDangerZone(true)}
+                        className="w-full flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
+                    >
+                        <span className="font-medium text-ios-red">{t('danger_zone')}</span>
+                        <ChevronRight className="w-5 h-5 text-ios-gray/30" />
+                    </button>
+                </>
+            )}
         </div>
     );
 
