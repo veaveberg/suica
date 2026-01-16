@@ -201,7 +201,7 @@ export const translations: Record<Language, any> = {
         login_with_mock: 'Войти как администратор (Dev)',
         by_logging_in: 'Входя в систему, вы соглашаетесь с нашими',
         terms_of_service: 'условиями использования',
-        terms_content: 'Вы доверяете Samsha свои данные, пока они работают над более приватным решением.',
+        terms_content: 'Вы доверяете Самше свои данные, пока они работают над более приватным решением',
     },
     EN: {
         dashboard: 'Dashboard',
@@ -588,6 +588,6 @@ export const translations: Record<Language, any> = {
         login_with_mock: 'შესვლა როგორც ადმინისტრატორი (Dev)',
         by_logging_in: 'სისტემაში შესვლით თქვენ ეთანხმებით ჩვენს',
         terms_of_service: 'წესებსა და პირობებს',
-        terms_content: 'თქვენ ანდობთ Samsha-ს თქვენს მონაცემებს, სანამ ისინი მუშაობენ უფრო პირად გადაწყვეტაზე.',
+        terms_content: 'თქვენ ანდობთ სამშას თქვენს მონაცემებს, სანამ ისინი მუშაობენ უფრო პირად გადაწყვეტაზე.',
     },
 };
