@@ -30,7 +30,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             {/* Settings Button */}
             <button
                 onClick={() => setShowSettings(true)}
-                className="absolute top-4 right-4 z-50 p-2 text-white/50 hover:text-white transition-colors bg-white/5 rounded-full backdrop-blur-md"
+                className="absolute top-0 right-4 z-50 p-2 mt-[calc(env(safe-area-inset-top)+1rem)] text-white/50 hover:text-white transition-colors bg-white/5 rounded-full backdrop-blur-md"
             >
                 <Settings className="w-5 h-5" />
             </button>

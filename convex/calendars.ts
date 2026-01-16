@@ -79,6 +79,49 @@ export const remove = mutation({
             throw new Error("Unauthorized");
         }
 
+
         await ctx.db.delete(args.id);
     },
 });
+
+// Returns the ICS export URL for the user
+export const getExportUrl = query({
+    args: { userId: v.id("users") },
+    handler: async (ctx, args) => {
+        // Construct the URL. In Convex, we can use the configured site URL.
+        const siteUrl = process.env.CONVEX_SITE_URL;
+        if (!siteUrl) return null;
+
+        return `${siteUrl}/calendar?id=${args.userId}`;
+    },
+});
+
+export const getGroupExportUrls = query({
+    args: { userId: v.id("users") },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const siteUrl = process.env.CONVEX_SITE_URL;
+        if (!siteUrl) return [];
+
+        // For now, only Teachers own groups.
+        // Students see groups they are in (not implemented yet for individual export, but could be)
+        // Let's implement for teacher only for now as requested.
+
+        // TODO: Handle student view if needed.
+
+        const groups = await ctx.db
+            .query("groups")
+            .withIndex("by_user", q => q.eq("userId", user.tokenIdentifier))
+            .collect();
+
+        return groups
+            .filter(g => g.status === 'active')
+            .map(g => ({
+                id: g._id,
+                name: g.name,
+                color: g.color,
+                url: `${siteUrl}/calendar?id=${args.userId}&groupId=${g._id}`
+            }));
+    }
+});
+

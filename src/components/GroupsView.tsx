@@ -6,11 +6,19 @@ import { Plus, ChevronDown, ChevronRight, Archive } from 'lucide-react';
 import type { Group } from '../types';
 import { GroupDetailSheet } from './GroupDetailSheet';
 
+import { useSearchParams } from '../hooks/useSearchParams';
+
 export const GroupsView: React.FC = () => {
     const { t, i18n } = useTranslation();
+    const { getParam, setParam } = useSearchParams();
     const [showArchived, setShowArchived] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-    const [isCreating, setIsCreating] = useState(false);
+
+    const isCreating = getParam('sheet') === 'create_group';
+    const setIsCreating = (val: boolean) => {
+        if (val) setParam('sheet', 'create_group');
+        else setParam('sheet', null);
+    };
     const [newGroupName, setNewGroupName] = useState('');
 
     const { groups, schedules, refreshGroups, refreshSchedules, refreshLessons } = useData();

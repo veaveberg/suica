@@ -11,6 +11,7 @@ import { SettingsSheet } from './SettingsSheet'
 import { useData } from '../DataProvider'
 import { syncLessonsFromSchedule } from '../db'
 import { cn } from '../utils/cn'
+import { useSearchParams } from '../hooks/useSearchParams'
 import type { Language } from '../types'
 
 export type TabId = 'classes' | 'groups' | 'students' | 'calendar' | 'passes'
@@ -29,8 +30,31 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     onChangeLanguage
 }) => {
     const { t } = useTranslation()
-    const [activeTab, setActiveTab] = useState<TabId>('classes')
-    const [showSettings, setShowSettings] = useState(false)
+    const { getParam, setParam } = useSearchParams()
+
+    // Sync Active Tab
+    const tabParam = getParam('tab') as TabId | null
+    const isValidTab = (t: string | null): t is TabId =>
+        ['classes', 'groups', 'students', 'calendar', 'passes'].includes(t || '')
+    const activeTab = isValidTab(tabParam) ? tabParam : 'classes'
+
+    const setActiveTab = (tab: TabId) => {
+        setParam('tab', tab)
+        // Clear sheet param when changing tabs to be clean, or keep it? 
+        // Plan says "global sheets", settings is global.
+        // If we switch tabs, settings might stay open if it's an overlay.
+        // But activeTab state is mainly for the underlying view.
+    }
+
+    // Sync Settings Sheet
+    const showSettings = getParam('sheet') === 'settings'
+    const setShowSettings = (show: boolean) => {
+        if (show) {
+            setParam('sheet', 'settings')
+        } else {
+            setParam('sheet', null)
+        }
+    }
 
     const { students, lessons, subscriptions, refreshLessons } = useData()
     const [isSelectionMode, setIsSelectionMode] = useState(false)

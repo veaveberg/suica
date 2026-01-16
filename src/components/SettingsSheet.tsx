@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { X, Sun, Globe, Trash2, ChevronRight, ArrowLeft, Calendar, Plus, Check, Eye, EyeOff, LogOut, Pencil } from 'lucide-react';
+import { X, Sun, Globe, Trash2, ChevronRight, ArrowLeft, Calendar, Plus, Check, Eye, EyeOff, LogOut, Pencil, Copy, Share } from 'lucide-react';
 import {
     clearAllData,
     useExternalCalendars,
@@ -33,6 +33,83 @@ const CALENDAR_COLORS = [
     '#F06292', '#BA68C8', '#9575CD', '#7986CB', '#64B5F6', '#4FC3F7', '#4DB6AC', '#81C784', // Pastels
     '#7C9885', '#BCAAA4', // Muted
 ];
+
+const CalendarExportSection = ({ t, userId }: { t: any, userId?: string }) => {
+    const exportUrl = useQuery(api.calendars.getExportUrl, userId ? { userId: userId as any } : "skip");
+    const groupExports = useQuery(api.calendars.getGroupExportUrls, userId ? { userId: userId as any } : "skip");
+
+    const [mainCopied, setMainCopied] = useState(false);
+    const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
+
+
+    const handleCopy = (url: string, setFn: (v: boolean) => void) => {
+        if (!url) return;
+        navigator.clipboard.writeText(url);
+        setFn(true);
+        setTimeout(() => setFn(false), 2000);
+    };
+
+    if (!exportUrl) return null;
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-3 px-1 text-ios-gray">
+                <Calendar className="w-4 h-4" />
+                <span className="text-xs font-semibold uppercase tracking-wider">{t('add_to_calendar_app') || 'Add Suica to your calendar app'}</span>
+            </div>
+            <div className="bg-ios-background dark:bg-zinc-800 rounded-2xl overflow-hidden divide-y divide-ios-gray/10 dark:divide-white/5">
+                {/* Main Link */}
+                <div className="p-3 pl-4 flex items-center justify-between hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                    <div>
+                        <p className="font-medium dark:text-white text-sm">{t('all_groups') || 'All Groups'}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => handleCopy(exportUrl, setMainCopied)}
+                            className="p-2 text-ios-blue hover:bg-ios-blue/10 rounded-lg transition-colors"
+                        >
+                            {mainCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                        {navigator.share && (
+                            <button
+                                onClick={() => navigator.share({ url: exportUrl, title: "Suica Calendar" })}
+                                className="p-2 text-ios-blue hover:bg-ios-blue/10 rounded-lg transition-colors"
+                            >
+                                <Share className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Groups List */}
+                {groupExports && groupExports.map(g => (
+                    <div key={g.id} className="p-3 pl-4 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: g.color }} />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium dark:text-white truncate">{g.name}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => handleCopy(g.url, (val) => setCopiedGroup(val ? g.id : null))}
+                                className="p-2 text-ios-blue hover:bg-ios-blue/10 rounded-lg transition-colors"
+                            >
+                                {copiedGroup === g.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                            {navigator.share && (
+                                <button
+                                    onClick={() => navigator.share({ url: g.url, title: `Suica: ${g.name}` })}
+                                    className="p-2 text-ios-blue hover:bg-ios-blue/10 rounded-lg transition-colors"
+                                >
+                                    <Share className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 
 export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     isOpen,
@@ -275,6 +352,11 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                 />
             </div>
 
+            <CalendarExportSection
+                t={t}
+                userId={convexUser?._id}
+            />
+
             {!minimal && (
                 <>
                     <button
@@ -472,7 +554,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative w-full max-w-md bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl p-6 space-y-6 min-h-[400px] overflow-hidden">
+            <div className="relative w-full max-w-md bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl p-6 space-y-6 min-h-[400px] max-h-[85vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {(showingSubpage || showingCalendarForm) && (

@@ -5,11 +5,18 @@ import { useTelegram } from './TelegramProvider';
 import { Calendar, User, BookOpen, LogOut } from 'lucide-react';
 import { StudentCard } from './StudentCard';
 
+import { useSearchParams } from '../hooks/useSearchParams';
+
 export const StudentPortal: React.FC = () => {
     const { t } = useTranslation();
     const { logout } = useTelegram();
     const { lessons, subscriptions, students } = useData();
-    const [activeTab, setActiveTab] = useState<'lessons' | 'profile'>('lessons');
+    const { getParam, setParam } = useSearchParams();
+
+    const tabParam = getParam('tab');
+    const isValidTab = (t: string | null): t is 'lessons' | 'profile' => t === 'lessons' || t === 'profile';
+    const activeTab = isValidTab(tabParam) ? tabParam : 'lessons';
+    const setActiveTab = (tab: 'lessons' | 'profile') => setParam('tab', tab);
 
     // Find "Me" in the students list (fetched via API as restricted list)
     // The students list for a student user only contains themselves.

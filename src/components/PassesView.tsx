@@ -5,11 +5,19 @@ import { useData } from '../DataProvider';
 import { PassDetailSheet } from './PassDetailSheet';
 import { PassCard } from './PassCard';
 
+import { useSearchParams } from '../hooks/useSearchParams';
+
 export const PassesView: React.FC = () => {
     const { t } = useTranslation();
+    const { getParam, setParam } = useSearchParams();
     const { passes, groups, passGroups, loading } = useData();
     const [selectedPassId, setSelectedPassId] = useState<string | null>(null);
-    const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+    const isCreateOpen = getParam('sheet') === 'create_pass';
+    const setIsCreateOpen = (val: boolean) => {
+        if (val) setParam('sheet', 'create_pass');
+        else setParam('sheet', null);
+    };
 
     if (loading && passes.length === 0) {
         return (
