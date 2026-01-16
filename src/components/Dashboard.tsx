@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, Ban, Users, Circle, Trash2, Check, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { CheckCircle2, Ban, Users, Circle, Trash2, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import type { Lesson, Student } from '../types';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import { useData } from '../DataProvider';
 import { deleteLessons } from '../db-server';
 import { cn } from '../utils/cn';
 import { formatDate, formatTimeRange } from '../utils/formatting';
-import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent, type ExternalEvent } from '../utils/ical';
+import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
+import type { ExternalEvent } from '../types';
 
 interface DashboardProps {
     students: Student[];

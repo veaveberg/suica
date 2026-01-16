@@ -2,7 +2,7 @@ import { useEffect, useState, createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { setAuthUser, getAuthUserId, getAuthRole, clearAuthUser, currentUserId as storedUserId } from '../auth-store';
+import { setAuthUser, getAuthRole, clearAuthUser, currentUserId as storedUserId } from '../auth-store';
 
 interface TelegramContextValue {
     isReady: boolean;
@@ -93,14 +93,16 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                 initData: "login_widget", // We flag this for backend to know it's a widget login
                 userData: tgUser
             });
-            setAuthUser(user._id, user.role, user.studentId);
-            setUserData({
-                userId: tgUser.id,
-                firstName: tgUser.first_name,
-                lastName: tgUser.last_name,
-                username: tgUser.username,
-                convexUser: { _id: user._id, role: user.role }
-            });
+            if (user) {
+                setAuthUser(user._id, user.role, user.studentId);
+                setUserData({
+                    userId: tgUser.id,
+                    firstName: tgUser.first_name,
+                    lastName: tgUser.last_name,
+                    username: tgUser.username,
+                    convexUser: { _id: user._id, role: user.role }
+                });
+            }
         } catch (e) {
             console.error("Auth failed", e);
         }
@@ -158,21 +160,23 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                     const user = await login({
                         initData: tgWebApp.initData,
                         userData: {
-                            id: tgWebApp.initDataUnsafe.user.id,
-                            first_name: tgWebApp.initDataUnsafe.user.first_name,
+                            id: tgWebApp.initDataUnsafe.user.id!,
+                            first_name: tgWebApp.initDataUnsafe.user.first_name!,
                             last_name: tgWebApp.initDataUnsafe.user.last_name,
                             username: tgWebApp.initDataUnsafe.user.username,
                             photo_url: tgWebApp.initDataUnsafe.user.photo_url
                         }
                     });
-                    setAuthUser(user._id, user.role, user.studentId);
-                    setUserData({
-                        userId: tgWebApp.initDataUnsafe.user.id,
-                        username: tgWebApp.initDataUnsafe.user.username,
-                        firstName: tgWebApp.initDataUnsafe.user.first_name,
-                        lastName: tgWebApp.initDataUnsafe.user.last_name,
-                        convexUser: { _id: user._id, role: user.role }
-                    });
+                    if (user) {
+                        setAuthUser(user._id, user.role, user.studentId);
+                        setUserData({
+                            userId: tgWebApp.initDataUnsafe.user.id,
+                            username: tgWebApp.initDataUnsafe.user.username,
+                            firstName: tgWebApp.initDataUnsafe.user.first_name,
+                            lastName: tgWebApp.initDataUnsafe.user.last_name,
+                            convexUser: { _id: user._id, role: user.role }
+                        });
+                    }
                 }
 
                 applyThemeVariables(tgWebApp.themeParams);

@@ -4,6 +4,7 @@ export interface Group {
   color: string;                    // Hex color for calendar display
   default_duration_minutes: number; // Default lesson length (e.g., 60)
   status: 'active' | 'archived';
+  last_class_date?: string;
 }
 
 export interface Student {
@@ -16,13 +17,13 @@ export interface Student {
 }
 
 export interface StudentGroup {
-  id?: number;
+  id?: string;
   student_id: string;
   group_id: string;
 }
 
 export interface Tariff {
-  id?: number;
+  id?: string;
   type: string;
   name: string;
   price: number;
@@ -32,7 +33,7 @@ export interface Tariff {
 }
 
 export interface GroupSchedule {
-  id?: number;
+  id?: string;
   group_id: string;
   day_of_week: number;              // 0-6 (Sun-Sat)
   time: string;                     // "HH:mm" (free-form)
@@ -45,17 +46,17 @@ export interface GroupSchedule {
 export type AttendanceStatus = 'present' | 'absence_valid' | 'absence_invalid';
 
 export interface Attendance {
-  id?: number;
+  id?: string;
   lesson_id: string;
   student_id: string;
   status: AttendanceStatus;
 }
 
 export interface Subscription {
-  id?: number;
+  id?: string;
   user_id: string;
   group_id: string;                 // Subscription is for a specific group
-  tariff_id: number;
+  tariff_id: string;
   type: string;
   lessons_total: number;
   price: number;
@@ -81,7 +82,7 @@ export interface Lesson {
   time: string;
   duration_minutes: number;
   status: 'upcoming' | 'cancelled' | 'completed';
-  schedule_id?: number;             // null = one-off lesson
+  schedule_id?: string;             // null = one-off lesson
   students_count: number;
   total_amount: number;
   notes?: string;
@@ -97,7 +98,7 @@ export interface Pass {
 }
 
 export interface PassGroup {
-  id?: number;
+  id?: string;
   pass_id: string;
   group_id: string;
 }

@@ -24,11 +24,11 @@ export interface BalanceAuditEntry {
     attendanceStatus: AttendanceStatus | null;
     status: 'counted' | 'not_counted';
     reason: AuditReason;
-    coveredByPassId?: number;
+    coveredByPassId?: string;
 }
 
 export interface PassUsage {
-    passId: number;
+    passId: string;
     lessonsUsed: number;
     lessonsTotal: number;
     purchaseDate: string;
@@ -174,8 +174,8 @@ export function calculateStudentGroupBalanceWithAudit(
     );
 
     // Track remaining capacity per pass and usage
-    const passCapacity = new Map<number, number>();
-    const passUsageMap = new Map<number, number>();
+    const passCapacity = new Map<string, number>();
+    const passUsageMap = new Map<string, number>();
     for (const pass of sortedPasses) {
         passCapacity.set(pass.id!, pass.lessons_total);
         passUsageMap.set(pass.id!, 0);
@@ -218,7 +218,7 @@ export function calculateStudentGroupBalanceWithAudit(
             const isInvalidSkip = attendanceRecord.status === 'absence_invalid';
 
             let covered = false;
-            let candidatePassId: number | undefined = undefined;
+            let candidatePassId: string | undefined = undefined;
             let dateMatchesConsecutivePass = false;
 
             for (const pass of sortedPasses) {

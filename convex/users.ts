@@ -49,7 +49,7 @@ export const login = mutation({
         // For now, default to 'teacher' if no users exist, otherwise 'student'?
         // OR create as 'student' by default and manually promote?
         // Let's check total users count.
-        const allUsers = await ctx.db.query("users").take(1);
+        await ctx.db.query("users").take(1);
 
         const role = "teacher"; // Default to teacher for now to make development and onboarding easier.
 

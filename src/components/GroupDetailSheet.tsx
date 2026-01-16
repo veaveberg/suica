@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
-import { updateGroup, archiveGroup, restoreGroup, deleteGroup, addScheduleSlot, deleteScheduleSlot, updateScheduleSlot, addStudentToGroup, removeStudentFromGroup, generateFutureLessons, syncLessonsFromSchedule, deleteLesson } from '../db-server';
-import { X, Trash2, Archive, RotateCcw, Plus, Calendar, Users, Edit2, AlignCenterHorizontal } from 'lucide-react';
+import { updateGroup, archiveGroup, restoreGroup, deleteGroup, addScheduleSlot, deleteScheduleSlot, updateScheduleSlot, addStudentToGroup, removeStudentFromGroup, generateFutureLessons, syncLessonsFromSchedule } from '../db-server';
+import { X, Trash2, Archive, RotateCcw, Plus, Calendar, Users, AlignCenterHorizontal } from 'lucide-react';
 import { StudentSelector } from './StudentSelector';
-import type { Group, GroupSchedule } from '../types';
+import type { Group } from '../types';
 import { GROUP_COLORS } from '../constants/colors';
 
 interface GroupDetailSheetProps {
@@ -33,7 +33,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
     const [newSlotFrequency, setNewSlotFrequency] = useState(1);
     const [newSlotOffset, setNewSlotOffset] = useState(0);
     const [newSlotDuration, setNewSlotDuration] = useState('60');
-    const [editingSlotId, setEditingSlotId] = useState<number | null>(null);
+    const [editingSlotId, setEditingSlotId] = useState<string | null>(null);
     const [editSlotDay, setEditSlotDay] = useState(1);
     const [editSlotTime, setEditSlotTime] = useState('');
     const [editSlotFrequency, setEditSlotFrequency] = useState(1);
@@ -51,7 +51,6 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
 
     const memberIds = memberAssignments.map(a => String(a.student_id));
     const members = allStudents.filter(s => memberIds.includes(String(s.id)));
-    const nonMembers = allStudents.filter(s => !memberIds.includes(String(s.id)));
 
     const handleAlignLessons = async () => {
         setIsSyncing(true);
@@ -121,12 +120,12 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
         setNewSlotOffset(0);
     };
 
-    const handleDeleteSlot = async (scheduleId: number) => {
+    const handleDeleteSlot = async (scheduleId: string) => {
         await deleteScheduleSlot(scheduleId);
         await refreshAll();
     };
 
-    const handleUpdateSlot = async (scheduleId: number) => {
+    const handleUpdateSlot = async (scheduleId: string) => {
         await updateScheduleSlot(scheduleId, {
             day_of_week: editSlotDay,
             time: editSlotTime,
@@ -328,7 +327,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                                                                 return mm === 0 ? `${hh}` : `${hh}:${mm.toString().padStart(2, '0')}`;
                                                             };
                                                             return `${format(start)}–${format(end)}`;
-                                                        })()}, {schedule.frequency_weeks > 1 ? t(`every_${schedule.frequency_weeks}nd_week`) : t('every_week')}
+                                                        })()}, {(schedule.frequency_weeks || 1) > 1 ? t(`every_${schedule.frequency_weeks}nd_week`) : t('every_week')}
                                                     </span>
                                                 </div>
                                                 <button

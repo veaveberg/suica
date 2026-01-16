@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Clock, Calendar, ChevronsRight } from 'lucide-react';
 import { useData } from '../DataProvider';
-import { Subscription } from '../types';
+import type { Subscription } from '../types';
 import * as api from '../api';
 
 interface SubscriptionDetailSheetProps {

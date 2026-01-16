@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Search, UserPlus } from 'lucide-react';
 import { useData } from '../DataProvider';
 import * as api from '../api';
-import { addStudentToGroup } from '../db-server';
 import type { Student, Subscription } from '../types';
 import { StudentCard } from './StudentCard';
 import { calculateStudentGroupBalance } from '../utils/balance';
@@ -22,7 +21,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     const [isCardOpen, setIsCardOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-    const { groups, studentGroups, refreshStudents, refreshSubscriptions, refreshStudentGroups, attendance, lessons } = useData();
+    const { groups, studentGroups, refreshStudents, refreshSubscriptions, attendance, lessons } = useData();
     const activeGroups = groups.filter(g => g.status === 'active');
 
     // Filter out completely empty ghost students and apply search

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, UserPlus, AtSign, Users, Instagram, Hash } from 'lucide-react';
+import { X, AtSign, Instagram } from 'lucide-react';
 import type { Student } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';
@@ -9,7 +9,7 @@ import { addStudentToGroup } from '../db-server';
 interface AddStudentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onAdd: (student: Omit<Student, 'id'>) => void;
+    _onAdd: (student: Omit<Student, 'id'>) => void;
 }
 
 export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClose }) => {
@@ -28,7 +28,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
         if (activeGroups.length > 0 && !groupId) {
             setGroupId(activeGroups[0].id?.toString() || '');
         }
-    }, [activeGroups]);
+    }, [activeGroups, groupId]);
 
     // Reset fields when opening
     useEffect(() => {
@@ -37,8 +37,13 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
             setTgUsername('');
             setIgUsername('');
             setNotes('');
+            if (activeGroups.length > 0) {
+                setGroupId(activeGroups[0].id?.toString() || '');
+            } else {
+                setGroupId('');
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, activeGroups]);
 
     const handleSave = async () => {
         if (!name.trim()) return;
@@ -108,15 +113,14 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                                     {t('groups')}
                                 </label>
                                 <div className="relative mt-1">
-                                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ios-gray" />
                                     <select
                                         value={groupId}
                                         onChange={(e) => setGroupId(e.target.value)}
-                                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white appearance-none border-none focus:ring-0"
+                                        className="w-full pl-3 pr-3 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white appearance-none border-none focus:ring-0"
                                     >
                                         <option value="">{t('select_group')}</option>
                                         {activeGroups.map(g => (
-                                            <option key={g.id} value={g.id}>
+                                            <option key={g.id} value={g.id?.toString()}>
                                                 {g.name}
                                             </option>
                                         ))}

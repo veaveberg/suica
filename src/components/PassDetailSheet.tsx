@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Check, Trash2, Hash, Clock, Layers, Plus, Tag, ChevronsRight } from 'lucide-react';
+import { Check, Trash2, Hash, Clock, Tag, ChevronsRight } from 'lucide-react';
 import { useData } from '../DataProvider';
 import { createPass, updatePass, deletePass } from '../db-server';
-import { Pass } from '../types';
+import type { Pass } from '../types';
 import { cn } from '../utils/cn';
 
 interface PassDetailSheetProps {

@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { convex } from './convex-client';
@@ -6,7 +5,7 @@ import { getAuthUserId } from './auth-store';
 import { useTelegram } from './components/TelegramProvider';
 import type { Group, Student, StudentGroup, Subscription, Lesson, GroupSchedule, Attendance, Tariff, Pass, PassGroup, ExternalCalendar } from './types';
 import { GROUP_COLORS } from './constants/colors';
-import { Id } from '../convex/_generated/dataModel';
+import type { Id } from '../convex/_generated/dataModel';
 
 export { GROUP_COLORS };
 
@@ -258,7 +257,7 @@ export async function syncLessonsFromSchedule(targetGroupId?: string): Promise<v
     }
 }
 
-export async function generateFutureLessons(groupId: string, count: number = 4): Promise<void> {
+export async function generateFutureLessons(groupId: string, _count: number = 4): Promise<void> {
     // Re-use sync logic but specific for this group
     // The current syncLessonsFromSchedule generates 8 weeks.
     // We can just call it.
@@ -362,7 +361,7 @@ export async function addSubscription(sub: Omit<Subscription, 'id'>): Promise<st
         userId: userId as Id<"users">,
         user_id: sub.user_id as Id<"students">,
         group_id: sub.group_id as Id<"groups">,
-        tariff_id: sub.tariff_id as Id<"tariffs">,
+        tariff_id: sub.tariff_id as unknown as Id<"tariffs">,
         type: sub.type,
         lessons_total: sub.lessons_total,
         price: sub.price,

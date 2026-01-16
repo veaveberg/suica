@@ -1,4 +1,4 @@
-import { Send, ShieldCheck, Zap, Info } from 'lucide-react';
+import { Send, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TelegramLoginWidget } from './TelegramLoginWidget';
 
@@ -8,7 +8,7 @@ interface LoginPageProps {
     isLoading?: boolean;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, isLoading }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, isLoading }) => {
     const { t } = useTranslation();
 
     return (

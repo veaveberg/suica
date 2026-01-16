@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { convex } from '../convex-client'; // Direct client for loops
 import { getAuthUserId } from '../auth-store';
-import { Id } from '../../convex/_generated/dataModel';
+import type { Id } from '../../convex/_generated/dataModel';
 
 const TABLES = [
     'groups', 'students', 'student_groups',

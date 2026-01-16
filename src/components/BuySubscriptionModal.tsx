@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Sparkles, Clock, Calendar } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 import { useData } from '../DataProvider';
-import type { Subscription, Student, Pass, Group } from '../types';
+import type { Subscription, Student, Pass } from '../types';
 import { PassCard } from './PassCard';
 import { getPassDisplayName } from '../utils/passUtils';
 
@@ -39,7 +39,6 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
 
     if (!isOpen) return null;
 
-    const selectedGroup = groups.find(g => g.id?.toString() === selectedGroupId);
 
     // Filter passes that are linked to the selected group via pass_groups
     const filteredPasses = passes.filter(pass => {
@@ -50,14 +49,6 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         return associatedGroupIds.includes(String(selectedGroupId));
     });
 
-    // Helper to get pass groups for display in PassCard
-    const getPassGroupsList = (passId: string) => {
-        const relevantGroupIds = passGroups
-            .filter(pg => String(pg.pass_id) === String(passId))
-            .map(pg => pg.group_id);
-
-        return groups.filter(g => relevantGroupIds.includes(String(g.id)));
-    };
 
     // Check if student already has an active subscription for the first group (to apply discount)
     const hasActiveSubForMainGroup = groups.length > 0 && activeSubscriptions.some(
@@ -85,7 +76,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         onBuy({
             user_id: student.id!,
             group_id: selectedGroupId,
-            tariff_id: Number(pass.id),
+            tariff_id: String(pass.id),
             type: getPassDisplayName(pass, t),
             lessons_total: pass.lessons_count,
             price: price,

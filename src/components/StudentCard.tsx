@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, Minus, Clock, CheckCircle2, AlertCircle, Calendar, Layers, Check, AtSign, Instagram, MessageCircle, ExternalLink, Hash, Trash2, CreditCard, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { X, Plus, AlertCircle, Layers, AtSign, Instagram, MessageCircle, CreditCard, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import type { Subscription, Student, Group } from '../types';
 import { BuySubscriptionModal } from './BuySubscriptionModal';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
@@ -9,7 +9,8 @@ import { PassCard } from './PassCard';
 import { useData } from '../DataProvider';
 import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
 import * as api from '../api';
-import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit, BalanceAuditResult } from '../utils/balance';
+import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit } from '../utils/balance';
+import type { BalanceAuditResult } from '../utils/balance';
 
 interface StudentCardProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ interface StudentCardProps {
     subscriptions: Subscription[];
     onClose: () => void;
     onBuySubscription: (sub: Omit<Subscription, 'id'>) => void;
+    readOnly?: boolean;
 }
 
 export const StudentCard: React.FC<StudentCardProps> = ({
@@ -24,7 +26,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     student,
     subscriptions,
     onClose,
-    onBuySubscription
+    onBuySubscription,
+    readOnly = false
 }) => {
     const { t } = useTranslation();
 
@@ -37,12 +40,11 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const [editTelegram, setEditTelegram] = useState('');
     const [editInstagram, setEditInstagram] = useState('');
     const [editNotes, setEditNotes] = useState('');
-    const [stayInActive, setStayInActive] = useState<Set<number>>(new Set());
     const [editingSub, setEditingSub] = useState<Subscription | null>(null);
     const [isArchiveOpen, setIsArchiveOpen] = useState(false);
     const [auditingGroup, setAuditingGroup] = useState<{ groupId: string; group: Group; auditResult: BalanceAuditResult } | null>(null);
 
-    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, refreshSubscriptions, refreshAttendance, lessons, passes, attendance } = useData();
+    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, subscriptions: allSubscriptions, lessons, passes, attendance } = useData();
     const activeGroups = allGroupsRaw.filter(g => g.status === 'active');
 
     // Reset edit state when student changes or sheet opens
@@ -52,7 +54,6 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             setEditTelegram(student.telegram_username || '');
             setEditInstagram(student.instagram_username || '');
             setEditNotes(student.notes || '');
-            setStayInActive(new Set()); // Reset on student change or open
             setEditingSub(null);
         }
     }, [student, isOpen]);
@@ -61,14 +62,14 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     useEffect(() => {
         if (auditingGroup && student && student.id) {
             const freshResult = calculateStudentGroupBalanceWithAudit(
-                student.id, auditingGroup.groupId, subscriptions, attendance, lessons
+                student.id, auditingGroup.groupId, allSubscriptions, attendance, lessons
             );
             // Check if result actually changed to avoid unnecessary re-renders
             if (JSON.stringify(freshResult) !== JSON.stringify(auditingGroup.auditResult)) {
                 setAuditingGroup(prev => prev ? { ...prev, auditResult: freshResult } : null);
             }
         }
-    }, [attendance, subscriptions, lessons, student, auditingGroup?.groupId]);
+    }, [attendance, allSubscriptions, lessons, student, auditingGroup?.groupId]);
 
     if (!student) return null;
 
@@ -121,14 +122,14 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const studentIdStr = String(student.id);
 
     // In the new balance-based system, active passes are those that are not archived/expired
-    const activeSubs = subscriptions.filter(s => {
+    const activeSubs = allSubscriptions.filter(s => {
         const isStudent = String(s.user_id) === studentIdStr;
         const isActive = s.status === 'active' || !s.status;
         const isNotExpired = !s.expiry_date || today <= s.expiry_date;
         return isStudent && isActive && isNotExpired;
     });
 
-    const historySubs = subscriptions.filter(s => {
+    const historySubs = allSubscriptions.filter(s => {
         const isStudent = String(s.user_id) === studentIdStr;
         const isArchived = s.status === 'archived';
         const isExpired = s.expiry_date && s.expiry_date < today;
@@ -136,17 +137,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         return isStudent && (isArchived || isExpired);
     });
 
-    const handleDeleteSub = async (id: number) => {
-        if (confirm(t('confirm_delete_sub'))) {
-            await api.remove('subscriptions', id);
-            await refreshSubscriptions();
-        }
-    };
-
-    const handleArchiveSub = async (sub: Subscription) => {
-        await api.update('subscriptions', sub.id!, { status: 'archived' });
-        await refreshSubscriptions();
-    };
+    // handleDeleteSub and handleArchiveSub removed as they are now handled by SubscriptionDetailSheet
 
     return (
         <>
@@ -162,13 +153,15 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         <h2 className="font-bold text-lg dark:text-white truncate max-w-[200px]">
                             {student.name || t('add_student')}
                         </h2>
-                        <button
-                            onClick={handleSave}
-                            disabled={!editName.trim()}
-                            className="text-ios-blue font-semibold disabled:opacity-50"
-                        >
-                            {t('save')}
-                        </button>
+                        {!readOnly && (
+                            <button
+                                onClick={handleSave}
+                                disabled={!editName.trim()}
+                                className="text-ios-blue font-semibold disabled:opacity-50"
+                            >
+                                {t('save')}
+                            </button>
+                        )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -213,6 +206,14 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             </div>
                         </div>
 
+                        {/* Read-only notes if present */}
+                        {readOnly && editNotes && (
+                            <div className="p-3 bg-ios-background dark:bg-zinc-800 rounded-xl">
+                                <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest block mb-1">{t('note')}</label>
+                                <p className="text-sm dark:text-white whitespace-pre-wrap">{editNotes}</p>
+                            </div>
+                        )}
+
                         {/* Instagram Field */}
                         <div>
                             <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest px-1">{t('ig_username')}</label>
@@ -242,16 +243,18 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         </div>
 
                         {/* Notes Section */}
-                        <section>
-                            <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest px-1 mb-1 block">{t('note')}</label>
-                            <textarea
-                                value={editNotes}
-                                onChange={(e) => setEditNotes(e.target.value)}
-                                className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none"
-                                placeholder={t('note') || 'Note'}
-                                rows={2}
-                            />
-                        </section>
+                        {!readOnly && (
+                            <section>
+                                <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest px-1 mb-1 block">{t('note')}</label>
+                                <textarea
+                                    value={editNotes}
+                                    onChange={(e) => setEditNotes(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none"
+                                    placeholder={t('note') || 'Note'}
+                                    rows={2}
+                                />
+                            </section>
+                        )}
 
                         {/* Groups Section */}
                         <section>
@@ -284,7 +287,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 ))}
 
                                 {/* Add group button */}
-                                {!addingToGroup && (
+                                {!readOnly && !addingToGroup && (
                                     <button
                                         onClick={() => setAddingToGroup(true)}
                                         className="flex items-center gap-1 px-3 py-2 bg-ios-background dark:bg-zinc-800 rounded-xl text-ios-blue active:scale-95 transition-transform"
@@ -350,8 +353,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
                             // Show all groups with any transactions (don't filter by balance)
                             const groupBalances = Array.from(studentGroupIds).map(groupId => {
-                                const group = allGroupsRaw.find(g => String(g.id) === groupId);
-                                const { balance } = calculateStudentGroupBalance(student.id!, groupId, subscriptions, attendance, lessons);
+                                const group = allGroupsRaw.find(g => String(g.id) === String(groupId));
+                                const { balance } = calculateStudentGroupBalance(student.id!, groupId, allSubscriptions, attendance, lessons);
                                 return { groupId, group, balance };
                             }).filter(gb => gb.group); // Only filter out if group not found
 
@@ -370,7 +373,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                                 onClick={() => {
                                                     if (group) {
                                                         const auditResult = calculateStudentGroupBalanceWithAudit(
-                                                            student.id!, groupId, subscriptions, attendance, lessons
+                                                            student.id!, groupId, allSubscriptions, attendance, lessons
                                                         );
                                                         setAuditingGroup({ groupId, group, auditResult });
                                                     }
@@ -494,34 +497,38 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             </>
                         )}
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             <BuySubscriptionModal
                 isOpen={isBuyModalOpen}
                 student={student}
-                activeSubscriptions={subscriptions}
+                activeSubscriptions={allSubscriptions}
                 onClose={() => setIsBuyModalOpen(false)}
                 onBuy={onBuySubscription}
             />
 
-            {editingSub && (
-                <SubscriptionDetailSheet
-                    isOpen={!!editingSub}
-                    onClose={() => setEditingSub(null)}
-                    subscription={editingSub}
-                />
-            )}
+            {
+                editingSub && (
+                    <SubscriptionDetailSheet
+                        isOpen={!!editingSub}
+                        onClose={() => setEditingSub(null)}
+                        subscription={editingSub}
+                    />
+                )
+            }
 
-            {auditingGroup && (
-                <BalanceAuditSheet
-                    isOpen={!!auditingGroup}
-                    onClose={() => setAuditingGroup(null)}
-                    auditResult={auditingGroup.auditResult}
-                    group={auditingGroup.group}
-                    subscriptions={subscriptions}
-                />
-            )}
+            {
+                auditingGroup && (
+                    <BalanceAuditSheet
+                        isOpen={!!auditingGroup}
+                        onClose={() => setAuditingGroup(null)}
+                        auditResult={auditingGroup.auditResult}
+                        group={auditingGroup.group}
+                        subscriptions={allSubscriptions}
+                    />
+                )
+            }
         </>
     );
 };

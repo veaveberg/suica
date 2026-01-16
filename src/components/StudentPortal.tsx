@@ -7,8 +7,8 @@ import { StudentCard } from './StudentCard';
 
 export const StudentPortal: React.FC = () => {
     const { t } = useTranslation();
-    const { convexUser, logout } = useTelegram();
-    const { lessons, attendance, subscriptions, students } = useData();
+    const { logout } = useTelegram();
+    const { lessons, subscriptions, students } = useData();
     const [activeTab, setActiveTab] = useState<'lessons' | 'profile'>('lessons');
 
     // Find "Me" in the students list (fetched via API as restricted list)

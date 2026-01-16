@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Search, CheckCircle2, Circle } from 'lucide-react';
+import { Search, CheckCircle2 } from 'lucide-react';
 import type { Student } from '../types';
 import { cn } from '../utils/cn';
 

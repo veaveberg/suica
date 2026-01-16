@@ -22,6 +22,11 @@ type TableName = keyof typeof convexApi;
 
 export async function getAll<T>(table: TableName): Promise<T[]> {
     const userId = getAuthUserId();
+    // The following line seems to be a partial or incorrect edit from the user's instruction.
+    // It's syntactically incorrect and references `ctx.db` which is not available here.
+    // Reverting to original line based on the instruction's intent to fix implicit conversions,
+    // and the fact that the provided snippet is malformed.
+    // If the user intended to add a new line, it should be clearly specified.
     const data = await convex.query(convexApi[table].get, { userId: userId as Id<"users"> });
     return (data || []).map((item: any) => ({ ...item, id: item._id })) as T[];
 }
@@ -37,7 +42,7 @@ export async function getById<T>(table: TableName, id: string): Promise<T | null
     // Likely not often.
     // Let's implement a fallback: Fetch all (cached) and find.
     // Or throw error if not critical.
-    console.warn(`getById not optimized for ${table}`);
+    console.warn(`getById not optimized for ${String(table)}`);
     const all = await getAll<any>(table);
     return all.find((item: any) => item._id === id) || null;
 }
@@ -81,10 +86,10 @@ export async function bulkCreate<T>(table: TableName, items: any[]): Promise<T[]
         });
         return items as T[]; // return mock
     }
-    throw new Error("Bulk create not implemented for " + table);
+    throw new Error("Bulk create not implemented for " + String(table));
 }
 
-export async function clearTable(table: TableName): Promise<void> {
+export async function clearTable(_table: TableName): Promise<void> {
     console.warn("clearTable not supported");
 }
 

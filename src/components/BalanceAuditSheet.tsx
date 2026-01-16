@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, CheckCircle2, XCircle, AlertTriangle, Calendar, CreditCard, Clock } from 'lucide-react';
+import { X, CheckCircle2, XCircle, AlertTriangle, Calendar, CreditCard } from 'lucide-react';
 import type { BalanceAuditResult, BalanceAuditEntry, PassUsage, AuditReason } from '../utils/balance';
 import type { Group, Subscription, Pass, Lesson } from '../types';
 import { PassCard } from './PassCard';
@@ -52,43 +52,6 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
         }
     };
 
-    const getReasonColor = (reason: AuditReason): string => {
-        switch (reason) {
-            case 'counted_present':
-                return 'text-ios-green';
-            case 'counted_absence_invalid':
-                return 'text-ios-orange';
-            case 'not_counted_valid_skip':
-                return 'text-ios-blue';
-            case 'not_counted_cancelled':
-                return 'text-ios-gray';
-            case 'uncovered_pass_depleted':
-                return 'text-ios-red';
-            case 'uncovered_no_matching_pass':
-                return 'text-ios-red';
-            default:
-                return 'text-ios-gray';
-        }
-    };
-
-    const getReasonBgColor = (reason: AuditReason): string => {
-        switch (reason) {
-            case 'counted_present':
-                return 'bg-ios-green/10';
-            case 'counted_absence_invalid':
-                return 'bg-ios-orange/10';
-            case 'not_counted_valid_skip':
-                return 'bg-ios-blue/10';
-            case 'not_counted_cancelled':
-                return 'bg-gray-100 dark:bg-zinc-800';
-            case 'uncovered_pass_depleted':
-                return 'bg-ios-red/10';
-            case 'uncovered_no_matching_pass':
-                return 'bg-ios-red/10';
-            default:
-                return 'bg-gray-100 dark:bg-zinc-800';
-        }
-    };
 
     // Split into 3 categories now (Covered, Uncovered/Debt, Not Counted)
     const coveredEntries = auditResult.auditEntries.filter(e =>
@@ -107,7 +70,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
     const totalPassCredit = auditResult.passUsage.reduce((sum, pu) => sum + pu.lessonsTotal, 0);
 
     // Helper to get subscription details for a pass usage entry
-    const getSubscriptionForPass = (passId: number): Subscription | undefined => {
+    const getSubscriptionForPass = (passId: string): Subscription | undefined => {
         return subscriptions.find(s => s.id === passId);
     };
 
@@ -117,7 +80,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
     };
 
     // Lesson card component
-    const LessonCard: React.FC<{ entry: BalanceAuditEntry; showPass?: boolean }> = ({ entry, showPass = true }) => {
+    const LessonCard: React.FC<{ entry: BalanceAuditEntry; showPass?: boolean }> = ({ entry, showPass: _showPass = true }) => {
         const sub = entry.coveredByPassId ? getSubscriptionForPass(entry.coveredByPassId) : undefined;
         const lesson = lessons.find(l => String(l.id) === entry.lessonId);
         const isCounted = entry.status === 'counted';
@@ -203,8 +166,8 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                             />
                             <h2 className="text-lg font-bold dark:text-white">{group.name}</h2>
                         </div>
-                        <div className={`font-bold text-lg ${auditResult.balance > 0 ? 'text-ios-green' : auditResult.balance < 0 ? 'text-ios-red' : 'text-ios-gray'}`}>
-                            {auditResult.balance > 0 ? `+${auditResult.balance}` : auditResult.balance}
+                        <div className={`font - bold text - lg ${auditResult.balance > 0 ? 'text-ios-green' : auditResult.balance < 0 ? 'text-ios-red' : 'text-ios-gray'} `}>
+                            {auditResult.balance > 0 ? `+ ${auditResult.balance} ` : auditResult.balance}
                         </div>
                     </div>
 
@@ -223,8 +186,8 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                             <div className="border-t border-gray-100 dark:border-zinc-700 mt-3 pt-3">
                                 <div className="flex items-center justify-between">
                                     <span className="font-bold dark:text-white">{auditResult.balance >= 0 ? (t('surplus') || 'Remaining') : (t('debt') || 'Debt')}</span>
-                                    <span className={`font-bold text-lg ${auditResult.balance > 0 ? 'text-ios-green' : auditResult.balance < 0 ? 'text-ios-red' : 'text-ios-gray'}`}>
-                                        {auditResult.balance > 0 ? `+${auditResult.balance}` : auditResult.balance}
+                                    <span className={`font - bold text - lg ${auditResult.balance > 0 ? 'text-ios-green' : auditResult.balance < 0 ? 'text-ios-red' : 'text-ios-gray'} `}>
+                                        {auditResult.balance > 0 ? `+ ${auditResult.balance} ` : auditResult.balance}
                                     </span>
                                 </div>
                             </div>
@@ -262,7 +225,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                                             <div key={pu.passId} className="bg-ios-card dark:bg-zinc-900 rounded-xl p-3 shadow-sm">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <span className="font-medium dark:text-white text-sm">
-                                                        {sub ? getPassDisplayName(sub, t) : `Pass #${pu.passId}`}
+                                                        {sub ? getPassDisplayName(sub, t) : `Pass #${pu.passId} `}
                                                     </span>
                                                     <span className="text-xs text-ios-gray">
                                                         {pu.lessonsTotal - pu.lessonsUsed}/{pu.lessonsTotal} {t('lessons_remaining_count') || 'remaining'}
@@ -271,7 +234,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                                                 <div className="h-2 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-ios-blue rounded-full"
-                                                        style={{ width: `${((pu.lessonsTotal - pu.lessonsUsed) / pu.lessonsTotal) * 100}%` }}
+                                                        style={{ width: `${((pu.lessonsTotal - pu.lessonsUsed) / pu.lessonsTotal) * 100}% ` }}
                                                     />
                                                 </div>
                                             </div>

@@ -7,7 +7,8 @@ import { useData } from '../DataProvider';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import type { Lesson } from '../types';
 import { cn } from '../utils/cn';
-import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent, type ExternalEvent } from '../utils/ical';
+import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
+import type { ExternalEvent } from '../types';
 
 interface CalendarViewProps {
   onYearChange?: (year: string) => void;

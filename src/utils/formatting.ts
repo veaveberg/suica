@@ -1,4 +1,4 @@
-import { i18n } from 'i18next';
+import type { i18n } from 'i18next';
 
 /**
  * Returns the locale string for Intl formatting based on language code.

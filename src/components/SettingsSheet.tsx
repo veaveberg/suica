@@ -355,7 +355,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
         </div>
     );
 
-    const { convexUser } = useTelegram();
 
     const renderDangerZone = () => (
         <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-4">

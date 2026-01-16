@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ban, Calendar, Clock, Users, Trash2, Circle, XCircle, CheckCircle2, Check } from 'lucide-react';
+import { X, Ban, Calendar, Clock, Users, Trash2, XCircle, CheckCircle2, Check } from 'lucide-react';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';
@@ -16,7 +16,6 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     const { t, i18n } = useTranslation();
     const { groups, students, studentGroups, refreshLessons, refreshAttendance } = useData();
     const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
-    const [initialAttendance, setInitialAttendance] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
     const [notes, setNotes] = useState('');
     const [isCompleted, setIsCompleted] = useState(false);
     const [showReschedule, setShowReschedule] = useState(false);
@@ -53,15 +52,12 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                         map[r.student_id] = r.status;
                     });
                     setAttendanceData(map);
-                    setInitialAttendance(map);
                 })
                 .catch(() => {
                     setAttendanceData({});
-                    setInitialAttendance({});
                 });
         } else {
             setAttendanceData({});
-            setInitialAttendance({});
             setNotes('');
             setIsCompleted(false);
         }
@@ -69,15 +65,6 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
 
     if (!lesson) return null;
 
-    const cycleStatus = (studentId: string) => {
-        const statuses: (AttendanceStatus | 'not_marked')[] = ['not_marked', 'present', 'absence_valid', 'absence_invalid'];
-        const current = attendanceData[studentId] || 'not_marked';
-        const nextIndex = (statuses.indexOf(current) + 1) % statuses.length;
-        setAttendanceData(prev => ({
-            ...prev,
-            [studentId]: statuses[nextIndex]
-        }));
-    };
 
     // Count students marked as present
     const selected = Object.entries(attendanceData).filter(([_, status]) => status === 'present');
@@ -86,7 +73,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
         try {
             // Sync attendance records with DB
             // 1. Delete all for this lesson
-            const existing = await api.queryByField<{ id: number }>('attendance', 'lesson_id', lesson.id!);
+            const existing = await api.queryByField<{ id: string }>('attendance', 'lesson_id', lesson.id!);
             for (const rec of existing) {
                 await api.remove('attendance', rec.id);
             }
