@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
 
 // This is a simplified validation for now.
 // In a real production app, we MUST verify the hash using the Bot Token.
@@ -51,7 +50,6 @@ export const login = mutation({
         // OR create as 'student' by default and manually promote?
         // Let's check total users count.
         const allUsers = await ctx.db.query("users").take(1);
-        const isFirstUser = allUsers.length === 0;
 
         const role = "teacher"; // Default to teacher for now to make development and onboarding easier.
 

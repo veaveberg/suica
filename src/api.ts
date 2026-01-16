@@ -1,7 +1,7 @@
 import { convex } from './convex-client';
 import { api } from '../convex/_generated/api';
 import { getAuthUserId } from './auth-store';
-import { Id } from '../convex/_generated/dataModel';
+import type { Id } from '../convex/_generated/dataModel';
 
 // Map table names to Convex API modules
 const convexApi: any = {

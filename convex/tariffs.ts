@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ensureTeacher, ensureTeacherOrStudent, getUser } from "./permissions";
+import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
     args: { userId: v.id("users") },
