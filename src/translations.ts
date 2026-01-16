@@ -199,7 +199,9 @@ export const translations: Record<Language, any> = {
         confirm_reset: 'Нажмите еще раз для подтверждения',
         app_tagline: 'Система Управления и Контроля Абонементов',
         login_with_mock: 'Войти как администратор (Dev)',
-        by_logging_in: 'Входя в систему, вы соглашаетесь с нашими условиями использования',
+        by_logging_in: 'Входя в систему, вы соглашаетесь с нашими',
+        terms_of_service: 'условиями использования',
+        terms_content: 'Вы доверяете Samsha свои данные, пока они работают над более приватным решением.',
     },
     EN: {
         dashboard: 'Dashboard',
@@ -394,7 +396,9 @@ export const translations: Record<Language, any> = {
         confirm_reset: 'Tap again to confirm',
         app_tagline: 'System of Unified Control of Abonnements',
         login_with_mock: 'Continue as Dev Admin',
-        by_logging_in: 'By logging in, you agree to our terms of service',
+        by_logging_in: 'By logging in, you agree to our',
+        terms_of_service: 'terms of service',
+        terms_content: 'You trust Samsha with your data as they work on a more private solution.',
     },
     KA: {
         dashboard: 'დაფა',
@@ -582,6 +586,8 @@ export const translations: Record<Language, any> = {
         confirm_reset: 'დააჭირეთ კიდევ ერთხელ დასადასტურებლად',
         app_tagline: 'თქვენი გაკვეთილების მენეჯერი',
         login_with_mock: 'შესვლა როგორც ადმინისტრატორი (Dev)',
-        by_logging_in: 'სისტემაში შესვლით თქვენ ეთანხმებით ჩვენს წესებსა და პირობებს',
+        by_logging_in: 'სისტემაში შესვლით თქვენ ეთანხმებით ჩვენს',
+        terms_of_service: 'წესებსა და პირობებს',
+        terms_content: 'თქვენ ანდობთ Samsha-ს თქვენს მონაცემებს, სანამ ისინი მუშაობენ უფრო პირად გადაწყვეტაზე.',
     },
 };
