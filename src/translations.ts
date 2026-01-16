@@ -201,8 +201,11 @@ export const translations: Record<Language, any> = {
         login_with_mock: 'Войти как администратор (Dev)',
         by_logging_in: 'Входя в систему, вы соглашаетесь с нашими',
         terms_of_service: 'условиями использования',
+        by_logging_in: 'Входя в систему, вы соглашаетесь с нашими',
+        terms_of_service: 'условиями использования',
         terms_title: 'Правила пользования',
         terms_content: 'Вы доверяете Самше свои данные, пока они работают над более приватным решением',
+        logged_in_via_telegram: 'Вы вошли через Telegram',
     },
     EN: {
         dashboard: 'Dashboard',
@@ -399,8 +402,10 @@ export const translations: Record<Language, any> = {
         login_with_mock: 'Continue as Dev Admin',
         by_logging_in: 'By logging in, you agree to our',
         terms_of_service: 'terms of service',
+        terms_of_service: 'terms of service',
         terms_title: 'Terms of Service',
         terms_content: 'You trust Samsha with your data as they work on a more private solution.',
+        logged_in_via_telegram: 'Logged in via Telegram',
     },
     KA: {
         dashboard: 'დაფა',
@@ -590,7 +595,9 @@ export const translations: Record<Language, any> = {
         login_with_mock: 'შესვლა როგორც ადმინისტრატორი (Dev)',
         by_logging_in: 'სისტემაში შესვლით თქვენ ეთანხმებით ჩვენს',
         terms_of_service: 'წესებსა და პირობებს',
+        terms_of_service: 'წესებსა და პირობებს',
         terms_title: 'წესები და პირობები',
         terms_content: 'თქვენ ანდობთ სამშას თქვენს მონაცემებს, სანამ ისინი მუშაობენ უფრო პირად გადაწყვეტაზე.',
+        logged_in_via_telegram: 'შესული ხართ Telegram-ით',
     },
 };

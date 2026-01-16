@@ -21,7 +21,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     onChangeThemeMode,
     onChangeLanguage
 }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [showSettings, setShowSettings] = useState(false);
     const [showTerms, setShowTerms] = useState(false);
 
@@ -59,6 +59,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             botName="suica_ekabot"
                             onAuth={onTelegramAuth}
                             className="w-full flex justify-center"
+                            lang={i18n.language.toLowerCase()}
                         />
                     </div>
 

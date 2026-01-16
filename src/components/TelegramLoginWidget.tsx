@@ -18,6 +18,7 @@ interface TelegramLoginWidgetProps {
     requestAccess?: boolean;
     usePic?: boolean;
     className?: string;
+    lang?: string;
 }
 
 declare global {
@@ -33,7 +34,8 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
     cornerRadius = 16,
     requestAccess = true,
     usePic = true,
-    className
+    className,
+    lang = 'en'
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const onAuthRef = useRef(onAuth);
@@ -64,6 +66,7 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
         script.setAttribute('data-userpic', usePic.toString());
         script.setAttribute('data-radius', cornerRadius.toString());
         script.setAttribute('data-onauth', 'onTelegramAuth(user)'); // Reverting to call syntax as per some docs
+        script.setAttribute('data-lang', lang);
         if (requestAccess) {
             script.setAttribute('data-request-access', 'write');
         }
