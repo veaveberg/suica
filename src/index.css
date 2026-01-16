@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ios-blue: #007AFF;
+  --ios-green: #34C759;
+  --ios-red: #FF3B30;
+  --ios-orange: #FF9500;
+  --ios-gray: #8E8E93;
+  --ios-background: #F2F2F7;
+  --ios-card: #FFFFFF;
+
+  /* Telegram theme variables (fallbacks for non-Telegram) */
+  --tg-theme-bg-color: var(--ios-background);
+  --tg-theme-text-color: #000000;
+  --tg-theme-hint-color: var(--ios-gray);
+  --tg-theme-link-color: var(--ios-blue);
+  --tg-theme-button-color: var(--ios-blue);
+  --tg-theme-button-text-color: #FFFFFF;
+  --tg-theme-secondary-bg-color: var(--ios-card);
+
+  /* Safe area insets */
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+}
+
+.dark {
+  --ios-background: #000000;
+  --ios-card: #1C1C1E;
+  --ios-gray: #98989D;
+
+  /* Dark mode Telegram fallbacks */
+  --tg-theme-bg-color: #000000;
+  --tg-theme-text-color: #FFFFFF;
+  --tg-theme-secondary-bg-color: #1C1C1E;
+}
+
+@layer base {
+
+  html {
+    height: 100vh;
+  }
+
+  body {
+    @apply bg-ios-background text-black font-sans antialiased transition-colors duration-300;
+    height: 100dvh;
+    width: 100%;
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    touch-action: pan-y;
+    background-color: var(--ios-background);
+  }
+
+  .dark html,
+  .dark body {
+    @apply text-white;
+    background-color: #000000;
+  }
+
+  #root {
+    height: 100%;
+    width: 100%;
+  }
+}
+
+@layer components {
+  .ios-card {
+    @apply bg-ios-card rounded-2xl shadow-sm p-4 transition-all active:scale-[0.98];
+  }
+
+  .dark .ios-card {
+    @apply border border-white/10;
+  }
+
+  .ios-button {
+    @apply bg-ios-blue text-white rounded-full px-6 py-2 font-semibold active:opacity-70 transition-opacity;
+  }
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    transform: scale(0.9);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in-bottom {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 400ms;
+  animation-fill-mode: both;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.zoom-in {
+  animation-name: zoom-in;
+}
+
+.slide-in-from-bottom-5 {
+  animation-name: slide-in-bottom;
+}
+
+.slide-in-from-right-4 {
+  animation-name: slide-in-right;
+}
+
+/* Composition */
+.fade-in.zoom-in {
+  animation-name: fade-in-zoom;
+}
+
+@keyframes fade-in-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

@@ -1,0 +1,55 @@
+[
+  {
+    "user_id": 1,
+    "group_id": "1",
+    "tariff_id": 3,
+    "type": "4 lessons",
+    "lessons_total": 4,
+    "lessons_left": 4,
+    "price": 170,
+    "purchase_date": "2025-12-04",
+    "expiry_date": "2026-01-03",
+    "is_consecutive": false,
+    "id": 2,
+    "duration_days": 0,
+    "status": "archived"
+  },
+  {
+    "user_id": 4,
+    "group_id": "1",
+    "tariff_id": 4,
+    "type": "Разовый",
+    "lessons_total": 1,
+    "price": 60,
+    "purchase_date": "2026-01-05",
+    "is_consecutive": true,
+    "status": "active",
+    "id": 3
+  },
+  {
+    "user_id": 4,
+    "group_id": "2",
+    "tariff_id": 5,
+    "type": "Разовый",
+    "lessons_total": 1,
+    "price": 45,
+    "purchase_date": "2026-01-05",
+    "is_consecutive": true,
+    "status": "active",
+    "id": 4
+  },
+  {
+    "user_id": 1,
+    "group_id": "1",
+    "tariff_id": 2,
+    "type": "4 lessons",
+    "lessons_total": 4,
+    "price": 170,
+    "purchase_date": "2026-01-04",
+    "is_consecutive": false,
+    "status": "active",
+    "id": 5,
+    "duration_days": 30,
+    "expiry_date": "2026-02-03"
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "lesson_id": 55,
+    "student_id": "1",
+    "status": "present",
+    "id": 24
+  },
+  {
+    "lesson_id": 50,
+    "student_id": "1",
+    "status": "absence_invalid",
+    "id": 27
+  },
+  {
+    "lesson_id": 42,
+    "student_id": "1",
+    "status": "absence_invalid",
+    "id": 28
+  },
+  {
+    "lesson_id": 51,
+    "student_id": "1",
+    "status": "present",
+    "id": 30
+  },
+  {
+    "lesson_id": 59,
+    "student_id": "1",
+    "status": "present",
+    "id": 31
+  },
+  {
+    "lesson_id": 59,
+    "student_id": "2",
+    "status": "present",
+    "id": 32
+  },
+  {
+    "lesson_id": 59,
+    "student_id": "4",
+    "status": "present",
+    "id": 33
+  },
+  {
+    "lesson_id": 58,
+    "student_id": "1",
+    "status": "present",
+    "id": 34
+  },
+  {
+    "lesson_id": 58,
+    "student_id": "4",
+    "status": "absence_invalid",
+    "id": 35
+  },
+  {
+    "lesson_id": 65,
+    "student_id": "1",
+    "status": "present",
+    "id": 36
+  },
+  {
+    "lesson_id": 65,
+    "student_id": "2",
+    "status": "present",
+    "id": 37
+  },
+  {
+    "lesson_id": 65,
+    "student_id": "4",
+    "status": "present",
+    "id": 38
+  },
+  {
+    "lesson_id": 57,
+    "student_id": "2",
+    "status": "present",
+    "id": 39
+  },
+  {
+    "lesson_id": 57,
+    "student_id": "4",
+    "status": "absence_invalid",
+    "id": 40
+  }
+]

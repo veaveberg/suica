@@ -1,0 +1,39 @@
+[
+  {
+    "name": "",
+    "price": 280,
+    "lessons_count": 8,
+    "is_consecutive": true,
+    "id": 1,
+    "duration_days": 30
+  },
+  {
+    "name": "",
+    "price": 150,
+    "lessons_count": 4,
+    "is_consecutive": true,
+    "id": 2
+  },
+  {
+    "name": "",
+    "price": 170,
+    "lessons_count": 4,
+    "is_consecutive": false,
+    "duration_days": 30,
+    "id": 3
+  },
+  {
+    "name": "",
+    "price": 60,
+    "lessons_count": 1,
+    "is_consecutive": true,
+    "id": 4
+  },
+  {
+    "name": "",
+    "price": 45,
+    "lessons_count": 1,
+    "is_consecutive": true,
+    "id": 5
+  }
+]

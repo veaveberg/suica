@@ -1,0 +1,128 @@
+export interface Group {
+  id?: string;
+  name: string;
+  color: string;                    // Hex color for calendar display
+  default_duration_minutes: number; // Default lesson length (e.g., 60)
+  status: 'active' | 'archived';
+}
+
+export interface Student {
+  id?: string;
+  name: string;
+  telegram_username?: string;
+  instagram_username?: string;
+  balance_notes?: string;
+  notes?: string;
+}
+
+export interface StudentGroup {
+  id?: number;
+  student_id: string;
+  group_id: string;
+}
+
+export interface Tariff {
+  id?: number;
+  type: string;
+  name: string;
+  price: number;
+  count: number;
+  is_consecutive: boolean;
+  duration_days?: number;
+}
+
+export interface GroupSchedule {
+  id?: number;
+  group_id: string;
+  day_of_week: number;              // 0-6 (Sun-Sat)
+  time: string;                     // "HH:mm" (free-form)
+  duration_minutes?: number;        // Overrides group default if set
+  frequency_weeks?: number;        // null/1 = every week, 2 = every 2nd week, etc.
+  week_offset?: number;            // 0 = cycle starts this week, 1 = cycle starts next week, etc.
+  is_active: boolean;
+}
+
+export type AttendanceStatus = 'present' | 'absence_valid' | 'absence_invalid';
+
+export interface Attendance {
+  id?: number;
+  lesson_id: string;
+  student_id: string;
+  status: AttendanceStatus;
+}
+
+export interface Subscription {
+  id?: number;
+  user_id: string;
+  group_id: string;                 // Subscription is for a specific group
+  tariff_id: number;
+  type: string;
+  lessons_total: number;
+  price: number;
+  purchase_date: string;
+  expiry_date?: string;
+  is_consecutive: boolean;
+  duration_days?: number;
+  status: 'active' | 'archived';
+}
+
+export interface Payment {
+  id?: string;
+  student_id: string;
+  amount: number;
+  screenshot_url?: string;
+  status: 'pending' | 'confirmed';
+}
+
+export interface Lesson {
+  id?: string;
+  group_id: string;
+  date: string;
+  time: string;
+  duration_minutes: number;
+  status: 'upcoming' | 'cancelled' | 'completed';
+  schedule_id?: number;             // null = one-off lesson
+  students_count: number;
+  total_amount: number;
+  notes?: string;
+}
+
+export interface Pass {
+  id?: string;
+  name: string;
+  price: number;
+  lessons_count: number;
+  is_consecutive: boolean;
+  duration_days?: number;
+}
+
+export interface PassGroup {
+  id?: number;
+  pass_id: string;
+  group_id: string;
+}
+
+export type Language = 'RU' | 'EN' | 'KA';
+
+export interface ExternalCalendar {
+  id?: string;
+  name: string;
+  url: string;
+  color: string;
+  enabled: boolean;
+  lastFetched?: string;
+}
+
+export interface ExternalEvent {
+  id?: string;
+  uid: string;
+  title: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+  location?: string;
+  description?: string;
+  url?: string;
+  calendarColor?: string;
+  calendarName?: string;
+}

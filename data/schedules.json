@@ -1,0 +1,53 @@
+[
+  {
+    "group_id": 39,
+    "day_of_week": 2,
+    "time": "21:00",
+    "is_active": true,
+    "id": 1
+  },
+  {
+    "group_id": 39,
+    "day_of_week": 4,
+    "time": "21:00",
+    "is_active": true,
+    "id": 2
+  },
+  {
+    "group_id": "1",
+    "day_of_week": 2,
+    "time": "21:00",
+    "is_active": true,
+    "id": 3,
+    "duration_minutes": 90,
+    "frequency_weeks": 1,
+    "week_offset": 0
+  },
+  {
+    "group_id": "1",
+    "day_of_week": 4,
+    "time": "21:00",
+    "is_active": true,
+    "id": 4
+  },
+  {
+    "group_id": "2",
+    "day_of_week": 6,
+    "time": "15:00",
+    "is_active": true,
+    "id": 5,
+    "frequency_weeks": 2,
+    "week_offset": 0,
+    "duration_minutes": 120
+  },
+  {
+    "group_id": "3",
+    "day_of_week": 6,
+    "time": "15:00",
+    "duration_minutes": 60,
+    "frequency_weeks": 2,
+    "week_offset": 1,
+    "is_active": true,
+    "id": 6
+  }
+]
