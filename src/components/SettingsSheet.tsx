@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Sun, Globe, Trash2, ChevronRight, ArrowLeft, Calendar, Plus, Check, Eye, EyeOff, LogOut } from 'lucide-react';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { X, Sun, Globe, Trash2, ChevronRight, ArrowLeft, Calendar, Plus, Check, Eye, EyeOff, LogOut, Pencil } from 'lucide-react';
 import {
     clearAllData,
     useExternalCalendars,
@@ -175,19 +177,53 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
         );
     };
 
-    const { firstName, logout } = useTelegram();
+    const { firstName, logout, convexUser } = useTelegram();
+    const updateNameMutation = useMutation(api.users.updateName);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [tempName, setTempName] = useState('');
+
+    const handleSaveName = async () => {
+        if (!tempName.trim() || !convexUser?._id) return;
+        await updateNameMutation({ userId: convexUser._id as any, name: tempName });
+        setIsEditingName(false);
+    };
 
     const renderMainSettings = () => (
         <div className="space-y-6">
             {/* User Info & Logout */}
             {!minimal && (
                 <div className="flex items-center justify-between p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-ios-blue/10 rounded-full flex items-center justify-center">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 shrink-0 bg-ios-blue/10 rounded-full flex items-center justify-center">
                             <span className="text-ios-blue font-bold">{firstName?.[0] || 'U'}</span>
                         </div>
-                        <div>
-                            <span className="font-medium dark:text-white">{firstName || t('user')}</span>
+                        <div className="flex-1 min-w-0">
+                            {isEditingName ? (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={tempName}
+                                        onChange={(e) => setTempName(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                                        className="w-full bg-white dark:bg-zinc-700 px-2 py-1 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ios-blue"
+                                    />
+                                    <button onClick={handleSaveName} className="p-1 text-ios-blue"><Check className="w-4 h-4" /></button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 group">
+                                    <span className="font-medium dark:text-white truncate">{firstName || t('user')}</span>
+                                    <button
+                                        onClick={() => {
+                                            setTempName(firstName || '');
+                                            setIsEditingName(true);
+                                        }}
+                                        className="p-1 text-ios-gray hover:text-ios-blue opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Pencil className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            )}
                             <p className="text-xs text-ios-gray">{t('logged_in_via_telegram') || 'Logged in via Telegram'}</p>
                         </div>
                     </div>
@@ -197,7 +233,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                                 logout();
                             }
                         }}
-                        className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors"
+                        className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors shrink-0"
                         title={t('logout')}
                     >
                         <LogOut className="w-5 h-5" />

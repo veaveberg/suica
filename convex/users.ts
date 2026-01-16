@@ -35,9 +35,10 @@ export const login = mutation({
 
         if (existingUser) {
             // Update basic info if changed
-            if (existingUser.name !== args.userData.first_name) {
-                await ctx.db.patch(existingUser._id, { name: args.userData.first_name });
-            }
+            // We do NOT update name automatically anymore, to allow user custom overrides.
+            // if (existingUser.name !== args.userData.first_name) {
+            //     await ctx.db.patch(existingUser._id, { name: args.userData.first_name });
+            // }
             // DEV: Auto-promote to teacher if requested
             if (existingUser.role !== 'teacher' && existingUser.role !== 'admin') {
                 await ctx.db.patch(existingUser._id, { role: 'teacher' });
@@ -71,5 +72,15 @@ export const getMe = query({
     args: { userId: v.id("users") },
     handler: async (ctx, args) => {
         return await ctx.db.get(args.userId);
+    },
+});
+
+export const updateName = mutation({
+    args: {
+        userId: v.id("users"),
+        name: v.string(),
+    },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.userId, { name: args.name });
     },
 });

@@ -198,6 +198,15 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         initTelegram();
     }, [login]);
 
+    const me = useQuery(api.users.getMe, userData.convexUser?._id ? { userId: userData.convexUser._id as any } : "skip");
+
+    useEffect(() => {
+        if (me?.name && me.name !== userData.firstName) {
+            console.log("[TelegramProvider] Syncing name from Convex:", me.name);
+            setUserData(prev => ({ ...prev, firstName: me.name }));
+        }
+    }, [me, userData.firstName]);
+
     const applyThemeVariables = (params: TelegramWebApp['themeParams']) => {
         const root = document.documentElement;
         if (params.bg_color) root.style.setProperty('--tg-theme-bg-color', params.bg_color);
