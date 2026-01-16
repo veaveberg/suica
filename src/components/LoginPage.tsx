@@ -16,7 +16,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, i
             {/* Background Image */}
             <div className="absolute inset-0 z-0">
                 <img
-                    src="/suica bg.png"
+                    src="suica bg.png"
                     alt="Background"
                     className="w-full h-full object-cover"
                 />

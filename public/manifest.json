@@ -2,7 +2,7 @@
     "name": "Suica",
     "short_name": "Suica",
     "description": "Class and subscription management",
-    "start_url": "/",
+    "start_url": "./",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#007AFF",
