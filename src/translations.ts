@@ -204,6 +204,7 @@ export const translations: Record<Language, any> = {
         terms_title: 'Правила пользования',
         terms_content: 'Вы доверяете Самше свои данные, пока они работают над более приватным решением',
         logged_in_via_telegram: 'Вы вошли через Telegram',
+        confirm_logout: 'Вы уверены, что хотите выйти?',
     },
     EN: {
         dashboard: 'Dashboard',
@@ -403,6 +404,7 @@ export const translations: Record<Language, any> = {
         terms_title: 'Terms of Service',
         terms_content: 'You trust Samsha with your data as they work on a more private solution.',
         logged_in_via_telegram: 'Logged in via Telegram',
+        confirm_logout: 'Are you sure you want to log out?',
     },
     KA: {
         dashboard: 'დაფა',
@@ -595,5 +597,6 @@ export const translations: Record<Language, any> = {
         terms_title: 'წესები და პირობები',
         terms_content: 'თქვენ ანდობთ სამშას თქვენს მონაცემებს, სანამ ისინი მუშაობენ უფრო პირად გადაწყვეტაზე.',
         logged_in_via_telegram: 'შესული ხართ Telegram-ით',
+        confirm_logout: 'დარწმუნებული ხართ, რომ გსურთ გასვლა?',
     },
 };

@@ -11,7 +11,6 @@ import {
 } from '../db-server';
 import type { Language, ExternalCalendar } from '../types';
 import { cn } from '../utils/cn';
-import { Migration } from './Migration';
 import { useTelegram } from './TelegramProvider';
 
 interface SettingsSheetProps {
@@ -190,7 +189,11 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                         </div>
                     </div>
                     <button
-                        onClick={logout}
+                        onClick={() => {
+                            if (confirm(t('confirm_logout'))) {
+                                logout();
+                            }
+                        }}
                         className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors"
                         title={t('logout')}
                     >
@@ -366,7 +369,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
 
     const renderDangerZone = () => (
         <div className="animate-in fade-in slide-in-from-right-4 duration-300 space-y-4">
-            <Migration />
             <button
                 onClick={handleClearData}
                 className={cn(

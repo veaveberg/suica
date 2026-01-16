@@ -113,9 +113,9 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
 
     const loginStandalone = async () => {
         const devUser = {
-            id: 111111,
-            first_name: "Dev Admin",
-            username: "dev_admin",
+            id: 129516266,
+            first_name: "Alexander",
+            username: "alexvber",
         };
         await onAuth(devUser);
     };

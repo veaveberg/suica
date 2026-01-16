@@ -81,7 +81,7 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
             // Cleanup if needed
             // We deliberately treat the script as managed by the container's innerHTML
         };
-    }, [botName, buttonSize, cornerRadius, requestAccess, usePic]); // Removed onAuth from dependency to avoid remounts
+    }, [botName, buttonSize, cornerRadius, requestAccess, usePic, lang]); // Removed onAuth from dependency to avoid remounts
 
     return (
         <div ref={containerRef} className={className} />
