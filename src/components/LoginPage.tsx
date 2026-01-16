@@ -90,7 +90,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowTerms(false)} />
                     <div className="relative w-full max-w-sm bg-ios-card dark:bg-zinc-900 rounded-3xl p-6 text-left shadow-2xl animate-in zoom-in-95 duration-200">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold dark:text-white">{t('terms_of_service')}</h3>
+                            <h3 className="text-xl font-bold dark:text-white">{t('terms_title')}</h3>
                             <button onClick={() => setShowTerms(false)} className="p-1 text-ios-gray hover:text-white transition-colors">
                                 <X className="w-6 h-6" />
                             </button>

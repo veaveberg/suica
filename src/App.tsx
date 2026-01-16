@@ -8,7 +8,7 @@ import { LoginPage } from './components/LoginPage'
 import { TeacherApp } from './components/TeacherApp'
 
 function App() {
-  const { t, i18n } = useTranslation()
+  const { i18n } = useTranslation()
   const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady } = useTelegram()
 
   if (!isReady) {
