@@ -55,7 +55,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarUrl, setCalendarUrl] = useState('');
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
-    const { firstName, logout, convexUser } = useTelegram();
+    const { firstName, logout, convexUser, loginStandalone } = useTelegram();
     const updateNameMutation = useMutation(api.users.updateName);
     const [isEditingName, setIsEditingName] = useState(false);
     const [tempName, setTempName] = useState('');
@@ -303,6 +303,18 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                         <ChevronRight className="w-5 h-5 text-ios-gray/30" />
                     </button>
                 </>
+            )}
+
+            {minimal && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.')) && (
+                <button
+                    onClick={() => {
+                        loginStandalone();
+                        onClose();
+                    }}
+                    className="w-full p-4 mt-8 rounded-2xl bg-ios-background dark:bg-zinc-800 text-ios-gray/40 hover:text-ios-blue text-xs font-medium transition-colors"
+                >
+                    {t('login_with_mock') || 'Login as Dev'}
+                </button>
             )}
         </div>
     );
