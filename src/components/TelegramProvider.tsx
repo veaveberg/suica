@@ -1,4 +1,4 @@
-import { useEffect, useState, createContext, useContext } from 'react';
+import { useEffect, useState, createContext, useContext, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -87,12 +87,14 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
 
     const login = useMutation(api.users.login);
 
-    const onAuth = async (tgUser: any) => {
+    const onAuth = useCallback(async (tgUser: any) => {
+        console.log("[TelegramAuth] Callback received from widget:", tgUser);
         try {
             const user = await login({
                 initData: "login_widget", // We flag this for backend to know it's a widget login
                 userData: tgUser
             });
+            console.log("[TelegramAuth] Convex login mutation result:", user);
             if (user) {
                 setAuthUser(user._id, user.role, user.studentId);
                 setUserData({
@@ -102,11 +104,12 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                     username: tgUser.username,
                     convexUser: { _id: user._id, role: user.role }
                 });
+                console.log("[TelegramAuth] User state updated successfully");
             }
         } catch (e) {
-            console.error("Auth failed", e);
+            console.error("[TelegramAuth] Auth failed during Convex mutation:", e);
         }
-    };
+    }, [login]);
 
     const loginStandalone = async () => {
         const devUser = {
