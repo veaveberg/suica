@@ -16,6 +16,8 @@ export const login = mutation({
             last_name: v.optional(v.string()),
             username: v.optional(v.string()),
             photo_url: v.optional(v.string()),
+            auth_date: v.optional(v.number()),
+            hash: v.optional(v.string()),
         }),
     },
     handler: async (ctx, args) => {
