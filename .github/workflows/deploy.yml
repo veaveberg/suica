@@ -32,6 +32,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_CONVEX_URL: https://flexible-leopard-684.convex.cloud
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
