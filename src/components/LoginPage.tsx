@@ -25,13 +25,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onTelegramAuth, i
             </div>
 
             <div className="z-10 w-full max-w-sm space-y-12 animate-in fade-in zoom-in duration-700">
-                {/* Logo/Icon */}
-                <div className="mx-auto w-24 h-24 bg-ios-blue rounded-3xl shadow-2xl shadow-ios-blue/30 flex items-center justify-center transform hover:scale-105 transition-transform">
-                    <Send className="w-12 h-12 text-white" />
-                </div>
-
                 <div className="space-y-2">
-                    <h1 className="text-5xl font-black text-white tracking-tight drop-shadow-lg">Suica</h1>
+                    <h1 className="text-5xl font-black text-white tracking-tight drop-shadow-lg">SUiCA</h1>
                     <p className="text-white/80 font-medium text-lg drop-shadow-md">{t('app_tagline') || 'Your intelligent class manager'}</p>
                 </div>
 
