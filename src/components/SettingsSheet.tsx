@@ -21,7 +21,6 @@ interface SettingsSheetProps {
     themeMode: 'auto' | 'light' | 'dark';
     onChangeThemeMode: (mode: 'auto' | 'light' | 'dark') => void;
     onChangeLanguage: (lang: Language) => void;
-    onChangeLanguage: (lang: Language) => void;
     onCalendarsChange?: () => void;
     minimal?: boolean;
 }
@@ -35,8 +34,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     isOpen,
     onClose,
     themeMode,
-    onChangeThemeMode,
-    onChangeLanguage,
     onChangeThemeMode,
     onChangeLanguage,
     onCalendarsChange,

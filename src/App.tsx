@@ -22,7 +22,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>('classes')
   const [showSettings, setShowSettings] = useState(false)
   const { t, i18n } = useTranslation()
-  const { colorScheme: tgColorScheme, isTelegram, convexUser, loginStandalone, onAuth, isReady } = useTelegram()
+  const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady } = useTelegram()
 
   if (!isReady) {
     return (
@@ -100,10 +100,6 @@ function App() {
   useEffect(() => {
     syncLessonsFromSchedule().then(() => refreshLessons());
   }, [refreshLessons]);
-
-  const changeLanguage = (lang: Language) => {
-    i18n.changeLanguage(lang)
-  }
 
   const tabs: { id: TabId; icon: typeof Book; label: string }[] = [
     { id: 'classes', icon: Book, label: t('classes') || 'Classes' },
