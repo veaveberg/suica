@@ -36,13 +36,26 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
     className
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    const onAuthRef = useRef(onAuth);
+
+    // Keep ref synced with latest callback
+    useEffect(() => {
+        onAuthRef.current = onAuth;
+    }, [onAuth]);
 
     useEffect(() => {
-        // Define the global callback
+        // Define the global callback safely
+        // ensuring we don't overwrite if it exists, or just overwrite to point to our ref
         window.onTelegramAuth = (user: TelegramUser) => {
-            console.log("[TelegramWidget] Global window.onTelegramAuth hit!");
-            onAuth(user);
+            console.log("[TelegramWidget] Global window.onTelegramAuth hit!", user);
+            if (onAuthRef.current) {
+                onAuthRef.current(user);
+            } else {
+                console.error("[TelegramWidget] onAuthRef is missing!");
+            }
         };
+
+        console.log("[TelegramWidget] Widget mounting, creating script...");
 
         const script = document.createElement('script');
         script.src = 'https://telegram.org/js/telegram-widget.js?22';
@@ -50,23 +63,22 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
         script.setAttribute('data-size', buttonSize);
         script.setAttribute('data-userpic', usePic.toString());
         script.setAttribute('data-radius', cornerRadius.toString());
-        script.setAttribute('data-onauth', 'onTelegramAuth');
+        script.setAttribute('data-onauth', 'onTelegramAuth(user)'); // Reverting to call syntax as per some docs
         if (requestAccess) {
             script.setAttribute('data-request-access', 'write');
         }
         script.async = true;
 
         if (containerRef.current) {
+            containerRef.current.innerHTML = ''; // Clear previous
             containerRef.current.appendChild(script);
         }
 
         return () => {
-            if (containerRef.current) {
-                containerRef.current.innerHTML = '';
-            }
-            // We don't delete the global callback to avoid issues if a late script execution happens
+            // Cleanup if needed
+            // We deliberately treat the script as managed by the container's innerHTML
         };
-    }, [botName, onAuth, buttonSize, cornerRadius, requestAccess, usePic]);
+    }, [botName, buttonSize, cornerRadius, requestAccess, usePic]); // Removed onAuth from dependency to avoid remounts
 
     return (
         <div ref={containerRef} className={className} />
