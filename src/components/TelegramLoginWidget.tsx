@@ -49,7 +49,7 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
         script.setAttribute('data-size', buttonSize);
         script.setAttribute('data-userpic', usePic.toString());
         script.setAttribute('data-radius', cornerRadius.toString());
-        script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+        script.setAttribute('data-onauth', 'onTelegramAuth');
         if (requestAccess) {
             script.setAttribute('data-request-access', 'write');
         }
