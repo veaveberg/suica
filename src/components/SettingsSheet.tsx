@@ -55,6 +55,17 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarUrl, setCalendarUrl] = useState('');
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
+    const { firstName, logout, convexUser } = useTelegram();
+    const updateNameMutation = useMutation(api.users.updateName);
+    const [isEditingName, setIsEditingName] = useState(false);
+    const [tempName, setTempName] = useState('');
+
+    const handleSaveName = async () => {
+        if (!tempName.trim() || !convexUser?._id) return;
+        await updateNameMutation({ userId: convexUser._id as any, name: tempName });
+        setIsEditingName(false);
+    };
+
     if (!isOpen) return null;
 
     const handleClearData = async () => {
@@ -177,16 +188,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
         );
     };
 
-    const { firstName, logout, convexUser } = useTelegram();
-    const updateNameMutation = useMutation(api.users.updateName);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [tempName, setTempName] = useState('');
-
-    const handleSaveName = async () => {
-        if (!tempName.trim() || !convexUser?._id) return;
-        await updateNameMutation({ userId: convexUser._id as any, name: tempName });
-        setIsEditingName(false);
-    };
 
     const renderMainSettings = () => (
         <div className="space-y-6">
