@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
-import { Id, Doc } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
 
 export const generateIcs = internalQuery({
     args: { userId: v.string(), groupId: v.optional(v.string()) }, // Receiving string ID from HTTP handler
@@ -85,13 +85,13 @@ export const generateIcs = internalQuery({
             // The app effectively treats these as "Floating" time or local time.
             // ICS best practice for floating time: YYYYMMDDTHHMMSS (no 'Z')
 
-            const dtStart = startStr.replace(/[-:]/g, "");
+            // const dtStart = startStr.replace(/[-:]/g, "");
 
             // Calculate End
             const startDate = new Date(startStr);
             const endDate = new Date(startDate.getTime() + lesson.duration_minutes * 60000);
 
-            const endStr = endDate.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
+            // const endStr = endDate.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
             // However, we want floating time to match start.
             // Javascript Date is tricky.
 
@@ -100,7 +100,7 @@ export const generateIcs = internalQuery({
             const [h, min] = lesson.time.split(":").map(Number);
 
             const startTotalMin = h * 60 + min;
-            const endTotalMin = startTotalMin + lesson.duration_minutes;
+            // const endTotalMin = startTotalMin + lesson.duration_minutes;
 
             // Re-using Date object but formatting strictly as floating local
             const sDate = new Date(y, m - 1, d, h, min);

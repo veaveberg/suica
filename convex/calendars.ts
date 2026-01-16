@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
+declare const process: { env: { [key: string]: string | undefined } };
+
 export const get = query({
     args: { userId: v.id("users") },
     handler: async (ctx, args) => {
@@ -87,7 +89,7 @@ export const remove = mutation({
 // Returns the ICS export URL for the user
 export const getExportUrl = query({
     args: { userId: v.id("users") },
-    handler: async (ctx, args) => {
+    handler: async (_ctx, args) => {
         // Construct the URL. In Convex, we can use the configured site URL.
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return null;
