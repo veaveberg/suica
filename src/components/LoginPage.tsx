@@ -1,4 +1,4 @@
-import { Send, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { TelegramLoginWidget } from './TelegramLoginWidget';
 
