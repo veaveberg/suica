@@ -1,5 +1,4 @@
-import { QueryCtx, MutationCtx } from "./_generated/server";
-import { v } from "convex/values";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
 
 // We assume the client passes 'userId' (the ID of the user document) as an argument for now,
 // or we use the session token if we had one.
@@ -9,7 +8,7 @@ import { v } from "convex/values";
 // Given the constraints and "MVP" migration, we will trust the `userId` argument passed by client
 // BUT we should verify it exists in the DB.
 
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 
 export async function getUser(ctx: QueryCtx | MutationCtx, userId: Id<"users">) {
     const user = await ctx.db.get(userId);
