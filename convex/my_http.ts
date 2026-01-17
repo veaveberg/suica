@@ -80,7 +80,7 @@ export const generateIcs = internalQuery({
 
             // Date handling
             // stored as date: "YYYY-MM-DD", time: "HH:mm"
-            const startStr = `${lesson.date}T${lesson.time}:00`;
+            // const startStr = `${lesson.date}T${lesson.time}:00`;
             // We assume local time for simplicity or interpret as UTC? 
             // The app effectively treats these as "Floating" time or local time.
             // ICS best practice for floating time: YYYYMMDDTHHMMSS (no 'Z')
