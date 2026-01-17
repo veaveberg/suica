@@ -88,7 +88,7 @@ export const generateIcs = internalQuery({
             // const dtStart = startStr.replace(/[-:]/g, "");
 
             // Calculate End
-            const startDate = new Date(startStr);
+            // const startDate = new Date(startStr);
             // const endDate = new Date(startDate.getTime() + lesson.duration_minutes * 60000);
 
             // const endStr = endDate.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
