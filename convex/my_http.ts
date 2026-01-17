@@ -89,7 +89,7 @@ export const generateIcs = internalQuery({
 
             // Calculate End
             const startDate = new Date(startStr);
-            const endDate = new Date(startDate.getTime() + lesson.duration_minutes * 60000);
+            // const endDate = new Date(startDate.getTime() + lesson.duration_minutes * 60000);
 
             // const endStr = endDate.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
             // However, we want floating time to match start.
@@ -99,7 +99,7 @@ export const generateIcs = internalQuery({
             const [y, m, d] = lesson.date.split("-").map(Number);
             const [h, min] = lesson.time.split(":").map(Number);
 
-            const startTotalMin = h * 60 + min;
+            // const startTotalMin = h * 60 + min;
             // const endTotalMin = startTotalMin + lesson.duration_minutes;
 
             // Re-using Date object but formatting strictly as floating local
