@@ -185,7 +185,7 @@ export const Migration: React.FC = () => {
                             userId: userId as Id<"users">,
                             user_id: sid as Id<"students">,
                             group_id: gid as Id<"groups">,
-                            tariff_id: tariffId as Id<"tariffs">,
+                            tariff_id: tariffId as any,
                             type: item.type,
                             lessons_total: item.lessons_total,
                             price: item.price,

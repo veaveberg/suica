@@ -35,7 +35,7 @@ export const create = mutation({
         userId: v.id("users"),
         user_id: v.id("students"),
         group_id: v.id("groups"),
-        tariff_id: v.optional(v.id("tariffs")),
+        tariff_id: v.optional(v.union(v.id("tariffs"), v.id("passes"))),
         type: v.string(),
         lessons_total: v.number(),
         price: v.number(),
@@ -73,6 +73,11 @@ export const update = mutation({
             lessons_total: v.optional(v.number()),
             status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
             expiry_date: v.optional(v.string()),
+            duration_days: v.optional(v.number()),
+            price: v.optional(v.number()),
+            purchase_date: v.optional(v.string()),
+            is_consecutive: v.optional(v.boolean()),
+            type: v.optional(v.string()),
         }),
     },
     handler: async (ctx, args) => {
@@ -85,5 +90,23 @@ export const update = mutation({
         }
 
         await ctx.db.patch(args.id, args.updates);
+    },
+});
+
+export const remove = mutation({
+    args: {
+        userId: v.id("users"),
+        id: v.id("subscriptions"),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const sub = await ctx.db.get(args.id);
+
+        if (!sub) throw new Error("Subscription not found");
+        if (sub.userId !== user.tokenIdentifier && user.role !== 'admin') {
+            throw new Error("Unauthorized");
+        }
+
+        await ctx.db.delete(args.id);
     },
 });

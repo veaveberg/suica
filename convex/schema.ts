@@ -38,7 +38,7 @@ export default defineSchema({
     subscriptions: defineTable({
         user_id: v.id("students"), // This maps to 'students' table, kept name 'user_id' to match old schema but it's confusing. Let's keep it for now but type is ID.
         group_id: v.id("groups"),
-        tariff_id: v.optional(v.id("tariffs")),
+        tariff_id: v.optional(v.union(v.id("tariffs"), v.id("passes"))),
         type: v.string(),
         lessons_total: v.number(),
         price: v.number(),

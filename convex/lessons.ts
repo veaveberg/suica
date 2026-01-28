@@ -150,3 +150,119 @@ export const bulkCreate = mutation({
         }
     }
 });
+
+// Sync lessons from schedule (Align events)
+export const syncFromSchedule = mutation({
+    args: {
+        userId: v.id("users"),
+        today: v.string(), // YYYY-MM-DD
+        groupId: v.optional(v.id("groups")),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+
+        const groupsToSync = args.groupId
+            ? [await ctx.db.get(args.groupId)]
+            : await ctx.db
+                .query("groups")
+                .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
+                .filter(q => q.eq(q.field("status"), "active"))
+                .collect();
+
+        const allSchedules = await ctx.db
+            .query("schedules")
+            .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
+            .collect();
+
+        const REF_MONDAY = 1736121600000; // 2025-01-06 00:00 UTC
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const MS_PER_WEEK = 7 * MS_PER_DAY;
+
+        for (const group of groupsToSync) {
+            if (!group) continue;
+
+            const groupSchedules = allSchedules.filter(s => s.group_id === group._id && s.is_active);
+            if (groupSchedules.length === 0) continue;
+
+            // Get existing upcoming lessons for this group
+            const existingLessons = await ctx.db
+                .query("lessons")
+                .withIndex("by_group_date", q => q.eq("group_id", group._id).gte("date", args.today))
+                .filter(q => q.eq(q.field("status"), "upcoming"))
+                .collect();
+
+            // Sort existing lessons by date and time
+            existingLessons.sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return a.time.localeCompare(b.time);
+            });
+
+            // Target slots generation
+            const targetSlots: { date: string, time: string, duration: number, scheduleId: any }[] = [];
+            const todayDate = new Date(args.today);
+            
+            // Generate until we have at least 8 weeks AND enough slots for all existing lessons
+            let daysToCheck = 56;
+            const minSlotsNeeded = existingLessons.length;
+            
+            let d = 0;
+            while (d < daysToCheck || targetSlots.length < minSlotsNeeded) {
+                const checkDate = new Date(todayDate.getTime() + d * MS_PER_DAY);
+                const dateStr = checkDate.toISOString().split('T')[0];
+                
+                // If we hit group completion date, stop
+                if (group.last_class_date && dateStr > group.last_class_date) break;
+
+                const dayOfWeek = checkDate.getDay();
+                const slotsForDay = groupSchedules.filter(s => s.day_of_week === dayOfWeek);
+
+                for (const slot of slotsForDay) {
+                    // Frequency check
+                    if (slot.frequency_weeks && slot.frequency_weeks > 1) {
+                        const diff = checkDate.getTime() - REF_MONDAY;
+                        const weeks = Math.floor(diff / MS_PER_WEEK);
+                        if ((weeks + (slot.week_offset || 0)) % slot.frequency_weeks !== 0) continue;
+                    }
+
+                    targetSlots.push({
+                        date: dateStr,
+                        time: slot.time,
+                        duration: slot.duration_minutes || group.default_duration_minutes,
+                        scheduleId: slot._id
+                    });
+                }
+                
+                d++;
+                if (d > 365) break; // Safety break
+            }
+
+            // Sync existing lessons to target slots
+            for (let i = 0; i < targetSlots.length; i++) {
+                const slot = targetSlots[i];
+                if (i < existingLessons.length) {
+                    // Update existing lesson
+                    const lesson = existingLessons[i];
+                    await ctx.db.patch(lesson._id, {
+                        date: slot.date,
+                        time: slot.time,
+                        duration_minutes: slot.duration,
+                        schedule_id: slot.scheduleId
+                    });
+                } else {
+                    // Create new lesson
+                    await ctx.db.insert("lessons", {
+                        group_id: group._id,
+                        userId: user.tokenIdentifier,
+                        date: slot.date,
+                        time: slot.time,
+                        duration_minutes: slot.duration,
+                        schedule_id: slot.scheduleId,
+                        status: "upcoming",
+                        students_count: 0,
+                        total_amount: 0
+                    });
+                }
+            }
+        }
+    }
+});

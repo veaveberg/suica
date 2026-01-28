@@ -79,7 +79,8 @@ export const update = mutation({
             name: v.optional(v.string()),
             status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
             last_class_date: v.optional(v.string()),
-            // Add other fields as needed
+            color: v.optional(v.string()),
+            default_duration_minutes: v.optional(v.number()),
         }),
     },
     handler: async (ctx, args) => {

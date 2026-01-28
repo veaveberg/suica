@@ -46,3 +46,47 @@ export const create = mutation({
         });
     },
 });
+
+export const update = mutation({
+    args: {
+        userId: v.id("users"),
+        id: v.id("tariffs"),
+        updates: v.object({
+            name: v.optional(v.string()),
+            type: v.optional(v.string()),
+            price: v.optional(v.number()),
+            count: v.optional(v.number()),
+            is_consecutive: v.optional(v.boolean()),
+            duration_days: v.optional(v.number()),
+        }),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const tariff = await ctx.db.get(args.id);
+
+        if (!tariff) throw new Error("Tariff not found");
+        if (tariff.userId !== user.tokenIdentifier && user.role !== 'admin') {
+            throw new Error("Unauthorized");
+        }
+
+        await ctx.db.patch(args.id, args.updates);
+    },
+});
+
+export const remove = mutation({
+    args: {
+        userId: v.id("users"),
+        id: v.id("tariffs"),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const tariff = await ctx.db.get(args.id);
+
+        if (!tariff) throw new Error("Tariff not found");
+        if (tariff.userId !== user.tokenIdentifier && user.role !== 'admin') {
+            throw new Error("Unauthorized");
+        }
+
+        await ctx.db.delete(args.id);
+    },
+});

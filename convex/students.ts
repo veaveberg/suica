@@ -75,3 +75,21 @@ export const update = mutation({
         await ctx.db.patch(args.id, args.updates);
     },
 });
+
+export const remove = mutation({
+    args: {
+        userId: v.id("users"),
+        id: v.id("students"),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const student = await ctx.db.get(args.id);
+
+        if (!student) throw new Error("Student not found");
+        if (student.userId !== user.tokenIdentifier && user.role !== 'admin') {
+            throw new Error("Unauthorized");
+        }
+
+        await ctx.db.delete(args.id);
+    },
+});

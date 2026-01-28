@@ -84,7 +84,14 @@ export async function bulkCreate<T>(table: TableName, items: any[]): Promise<T[]
             userId: userId as Id<"users">,
             lessons: items
         });
-        return items as T[]; // return mock
+        return items as T[];
+    }
+    if (table === 'attendance') {
+        await convex.mutation(api.attendance.bulkCreate, {
+            userId: userId as Id<"users">,
+            attendance: items
+        });
+        return items as T[];
     }
     throw new Error("Bulk create not implemented for " + String(table));
 }

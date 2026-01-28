@@ -179,82 +179,15 @@ export async function updateScheduleSlot(scheduleId: number | string, updates: P
 // ============================================
 
 export async function syncLessonsFromSchedule(targetGroupId?: string): Promise<void> {
-    // Client-side syncing logic using Convex Queries/Mutations explicitly?
-    // This is expensive. For MVP we skip "client side" sync logic if possible 
-    // and rely on manual "Generate Lessons" or just simplify.
-    // However, the app relies on this.
-    // Implementing purely via Convex Client calls is tricky without `await`ing queries easily (queries are reactive).
-    // `convex.query` is available!
-
-    // We already have `convex/lessons.ts:bulkCreate`.
     const userId = getAuthUserId() as Id<"users">;
+    // Get today's local date in YYYY-MM-DD format
+    const today = new Date().toLocaleDateString('en-CA');
 
-    // Fetch necessary data
-    // If targetGroupId is provided, we only sync that group.
-
-    const allSchedules = await convex.query(api.schedules.get, { userId });
-    const allGroups = await convex.query(api.groups.get, { userId });
-    const existingLessons = await convex.query(api.lessons.get, { userId });
-
-    const groupsToSync = targetGroupId
-        ? allGroups.filter(g => g._id === targetGroupId)
-        : allGroups.filter(g => g.status === 'active');
-
-    const lessonsToAdd: any[] = [];
-
-    // ... logic from original db.ts but adapted ...
-    // Simplified for brevity: Only strictly upcoming.
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (const group of groupsToSync) {
-        const schedules = allSchedules.filter(s => s.group_id === group._id && s.is_active);
-        // Logic to generate 8 weeks ahead
-        for (let i = 0; i < 56; i++) {
-            const checkDate = new Date(today);
-            checkDate.setDate(today.getDate() + i);
-            const dayOfWeek = checkDate.getDay();
-            const dateStr = checkDate.toISOString().split('T')[0];
-
-            // Check if group closed
-            if (group.last_class_date && dateStr > group.last_class_date) continue;
-
-            const activeSlots = schedules.filter(s => s.day_of_week === dayOfWeek);
-            for (const slot of activeSlots) {
-                // Check frequency
-                const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
-                if (slot.frequency_weeks && slot.frequency_weeks > 1) {
-                    // simple epoch math
-                    const epoch = new Date(0);
-                    const diff = checkDate.getTime() - epoch.getTime();
-                    const weeks = Math.floor(diff / MS_PER_WEEK);
-                    if ((weeks + (slot.week_offset || 0)) % slot.frequency_weeks !== 0) continue;
-                }
-
-                // Check if exists
-                const exists = existingLessons.some(l =>
-                    l.group_id === group._id && l.date === dateStr && l.time === slot.time
-                );
-
-                if (!exists) {
-                    lessonsToAdd.push({
-                        group_id: group._id,
-                        date: dateStr,
-                        time: slot.time,
-                        duration_minutes: slot.duration_minutes || group.default_duration_minutes,
-                        schedule_id: slot._id,
-                        status: 'upcoming'
-                    });
-                }
-            }
-        }
-    }
-
-    if (lessonsToAdd.length > 0) {
-        // split into chunks if huge
-        await convex.mutation(api.lessons.bulkCreate, { userId, lessons: lessonsToAdd });
-    }
+    await convex.mutation(api.lessons.syncFromSchedule, {
+        userId,
+        today,
+        groupId: targetGroupId as Id<"groups">
+    });
 }
 
 export async function generateFutureLessons(groupId: string, _count: number = 4): Promise<void> {
@@ -361,7 +294,7 @@ export async function addSubscription(sub: Omit<Subscription, 'id'>): Promise<st
         userId: userId as Id<"users">,
         user_id: sub.user_id as Id<"students">,
         group_id: sub.group_id as Id<"groups">,
-        tariff_id: sub.tariff_id as unknown as Id<"tariffs">,
+        tariff_id: sub.tariff_id as any,
         type: sub.type,
         lessons_total: sub.lessons_total,
         price: sub.price,

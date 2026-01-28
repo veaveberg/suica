@@ -68,3 +68,52 @@ export const mark = mutation({
         }
     },
 });
+
+export const remove = mutation({
+    args: {
+        userId: v.id("users"),
+        id: v.id("attendance"),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const record = await ctx.db.get(args.id);
+
+        if (!record) throw new Error("Attendance record not found");
+        if (record.userId !== user.tokenIdentifier && user.role !== 'admin') {
+            throw new Error("Unauthorized");
+        }
+
+        await ctx.db.delete(args.id);
+    },
+});
+
+export const bulkCreate = mutation({
+    args: {
+        userId: v.id("users"),
+        attendance: v.array(v.object({
+            lesson_id: v.id("lessons"),
+            student_id: v.id("students"),
+            status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+        }))
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+
+        for (const record of args.attendance) {
+            // Check if exists
+            const existing = await ctx.db
+                .query("attendance")
+                .withIndex("by_lesson_student", q => q.eq("lesson_id", record.lesson_id).eq("student_id", record.student_id))
+                .first();
+
+            if (existing) {
+                await ctx.db.patch(existing._id, { status: record.status });
+            } else {
+                await ctx.db.insert("attendance", {
+                    ...record,
+                    userId: user.tokenIdentifier,
+                });
+            }
+        }
+    }
+});

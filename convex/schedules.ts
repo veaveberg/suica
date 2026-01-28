@@ -111,6 +111,9 @@ export const update = mutation({
             day_of_week: v.optional(v.number()),
             time: v.optional(v.string()),
             is_active: v.optional(v.boolean()),
+            duration_minutes: v.optional(v.number()),
+            frequency_weeks: v.optional(v.number()),
+            week_offset: v.optional(v.number()),
         }),
     },
     handler: async (ctx, args) => {
