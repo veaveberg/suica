@@ -68,13 +68,13 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         syncLessonsFromSchedule().then(() => refreshLessons());
     }, [refreshLessons]);
 
-    const tabs: { id: TabId; icon: typeof Book; label: string }[] = [
+    const tabs: { id: TabId; icon: any; label: string }[] = [
         { id: 'classes', icon: Book, label: t('classes') || 'Classes' },
         { id: 'groups', icon: Layers, label: t('groups') },
         { id: 'passes', icon: CreditCard, label: t('passes') },
         { id: 'students', icon: Users, label: t('students') },
         { id: 'calendar', icon: Calendar, label: t('calendar') },
-    ].filter(tab => !isStudentGlobal || tab.id !== 'students')
+    ].filter(tab => !isStudentGlobal || tab.id !== 'students') as { id: TabId; icon: any; label: string }[]
 
     // Reset selection when changing tabs
     useEffect(() => {

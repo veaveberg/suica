@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { X, AtSign, Instagram } from 'lucide-react';
-import { Id } from '../../convex/_generated/dataModel';
+import { X, Instagram } from 'lucide-react';
 import { TelegramIcon } from './Icons';
 
 interface ProfileDetailSheetProps {

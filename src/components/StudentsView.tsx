@@ -186,7 +186,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 subscriptions={subscriptions}
                 onClose={() => setIsCardOpen(false)}
                 onBuySubscription={handleBuySubscription}
-                readOnly={!isAdmin && (isStudent || (selectedStudent && !!currentTgId && selectedStudent.userId !== String(currentTgId)))}
+                readOnly={!isAdmin && (isStudent || (!!selectedStudent && !!currentTgId && selectedStudent.userId !== String(currentTgId)))}
             />
         </div>
     );

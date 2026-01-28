@@ -3,7 +3,6 @@ import './i18n'
 import { useTranslation } from 'react-i18next'
 import type { Language } from './types'
 import { useTelegram } from './components/TelegramProvider'
-import { StudentPortal } from './components/StudentPortal'
 import { LoginPage } from './components/LoginPage'
 import { TeacherApp } from './components/TeacherApp'
 

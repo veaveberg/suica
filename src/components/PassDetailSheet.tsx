@@ -34,7 +34,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
             setName(pass.name);
             setPrice(String(pass.price));
             setLessonsCount(String(pass.lessons_count));
-            setIsConsecutive(pass.is_consecutive);
+            setIsConsecutive(pass.is_consecutive || false);
             setDurationDays(String(pass.duration_days || ''));
 
             const relevantGroupIds = passGroups

@@ -67,7 +67,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         const price = getPrice(pass);
         let expiryDate: string | undefined = undefined;
 
-        if (!pass.is_consecutive && pass.duration_days) {
+        if (!(pass.is_consecutive || false) && pass.duration_days) {
             const expiry = new Date(purchaseDate);
             expiry.setDate(expiry.getDate() + pass.duration_days);
             expiryDate = expiry.toISOString().split('T')[0];
@@ -82,7 +82,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
             price: price,
             purchase_date: purchaseDate,
             expiry_date: expiryDate,
-            is_consecutive: pass.is_consecutive,
+            is_consecutive: pass.is_consecutive || false,
             duration_days: pass.duration_days,
             status: 'active'
         });

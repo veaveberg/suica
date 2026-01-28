@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, CreditCard, MessageCircle, Instagram } from 'lucide-react';
+import { Plus, CreditCard, Instagram } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import { TelegramIcon } from './Icons';
@@ -8,7 +8,7 @@ import { PassDetailSheet } from './PassDetailSheet';
 import { PassCard } from './PassCard';
 
 import { useSearchParams } from '../hooks/useSearchParams';
-import { Group, Pass } from '../types';
+import type { Pass } from '../types';
 
 export const PassesView: React.FC = () => {
     const { t } = useTranslation();

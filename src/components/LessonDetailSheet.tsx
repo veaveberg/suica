@@ -19,7 +19,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     const { convexUser, userId: currentTgId } = useTelegram();
     const isAdmin = convexUser?.role === 'admin';
     const isOwner = lesson?.userId === String(currentTgId);
-    const isStudent = !isAdmin && (convexUser?.role === 'student' || (lesson && !!currentTgId && !isOwner));
+    const isStudent = !isAdmin && (convexUser?.role === 'student' || (!!lesson && !!currentTgId && !isOwner));
     const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
     const [notes, setNotes] = useState('');
     const [infoForStudents, setInfoForStudents] = useState('');

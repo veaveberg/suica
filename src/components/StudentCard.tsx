@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, AlertCircle, Layers, AtSign, Instagram, MessageCircle, CreditCard, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { X, Plus, AlertCircle, Layers, Instagram, CreditCard, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import type { Subscription, Student, Group } from '../types';
 import { BuySubscriptionModal } from './BuySubscriptionModal';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';

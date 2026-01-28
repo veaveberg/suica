@@ -101,6 +101,7 @@ export interface Pass {
   name: string;
   price: number;
   lessons_count: number;
+  is_consecutive?: boolean;
   duration_days?: number;
   userId?: string;
   teacherName?: string;

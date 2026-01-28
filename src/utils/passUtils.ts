@@ -4,7 +4,7 @@ export interface PassDisplayData {
     name?: string;
     lessons_count?: number;
     lessons_total?: number;
-    is_consecutive: boolean;
+    is_consecutive?: boolean;
     duration_days?: number;
 }
 
