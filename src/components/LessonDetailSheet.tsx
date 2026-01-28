@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Ban, Calendar, Clock, Users, Trash2, XCircle, CheckCircle2, Check } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';
@@ -15,8 +16,13 @@ interface LessonDetailSheetProps {
 export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, onClose }) => {
     const { t, i18n } = useTranslation();
     const { groups, students, studentGroups, refreshLessons, refreshAttendance } = useData();
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isAdmin = convexUser?.role === 'admin';
+    const isOwner = lesson?.userId === String(currentTgId);
+    const isStudent = !isAdmin && (convexUser?.role === 'student' || (lesson && !!currentTgId && !isOwner));
     const [attendanceData, setAttendanceData] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
     const [notes, setNotes] = useState('');
+    const [infoForStudents, setInfoForStudents] = useState('');
     const [isCompleted, setIsCompleted] = useState(false);
     const [showReschedule, setShowReschedule] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -41,6 +47,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     useEffect(() => {
         if (lesson) {
             setNotes(lesson.notes || '');
+            setInfoForStudents(lesson.info_for_students || '');
             setNewDate(lesson.date);
             setNewTime(lesson.time);
             setIsCompleted(lesson.status === 'completed');
@@ -59,6 +66,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
         } else {
             setAttendanceData({});
             setNotes('');
+            setInfoForStudents('');
             setIsCompleted(false);
         }
     }, [lesson]);
@@ -95,7 +103,8 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
             await api.update('lessons', lesson.id!, {
                 status: isCompleted ? 'completed' : 'upcoming',
                 students_count: selected.length,
-                notes
+                notes,
+                info_for_students: infoForStudents
             });
 
             await refreshLessons();
@@ -153,9 +162,13 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                     <h2 className="font-bold text-lg dark:text-white">
                         {group?.name || 'Lesson'}
                     </h2>
-                    <button onClick={handleSave} className="text-ios-blue font-semibold">
-                        {t('save')}
-                    </button>
+                    {!isStudent ? (
+                        <button onClick={handleSave} className="text-ios-blue font-semibold">
+                            {t('save')}
+                        </button>
+                    ) : (
+                        <div className="w-12" />
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -190,7 +203,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                             </span>
                             <div className="flex p-1 bg-ios-background dark:bg-zinc-800 rounded-xl">
                                 <button
-                                    onClick={() => setIsCompleted(false)}
+                                    onClick={() => !isStudent && setIsCompleted(false)}
                                     className={`flex-1 py-3 rounded-lg font-medium transition-all ${!isCompleted
                                         ? 'bg-white dark:bg-zinc-700 text-ios-blue shadow-sm'
                                         : 'text-ios-gray'
@@ -199,7 +212,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                     {t('not_marked') || 'Not marked'}
                                 </button>
                                 <button
-                                    onClick={() => setIsCompleted(true)}
+                                    onClick={() => !isStudent && setIsCompleted(true)}
                                     className={`flex-1 py-3 rounded-lg font-medium transition-all ${isCompleted
                                         ? 'bg-white dark:bg-zinc-700 text-ios-green shadow-sm'
                                         : 'text-ios-gray'
@@ -241,7 +254,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                 ...prev,
                                                 [student.id!]: newStatus
                                             }));
-                                            if (!silent && navigator.vibrate) navigator.vibrate(10);
+                                            if (!isStudent && !silent && navigator.vibrate) navigator.vibrate(10);
                                         };
 
                                         const handleSkipPointerDown = () => {
@@ -262,7 +275,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                         };
 
                                         const handleSkipClick = () => {
-                                            if (isLongPressRef.current) return;
+                                            if (isStudent || isLongPressRef.current) return;
                                             if (status === 'absence_invalid' || status === 'absence_valid') {
                                                 setStatus('not_marked');
                                             } else {
@@ -271,8 +284,8 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                         };
 
                                         const handlePresentClick = () => {
-                                            if (status === 'present') {
-                                                setStatus('not_marked');
+                                            if (isStudent || status === 'present') {
+                                                if (!isStudent) setStatus('not_marked');
                                             } else {
                                                 setStatus('present');
                                             }
@@ -342,8 +355,23 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                 <textarea
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
+                                    readOnly={isStudent}
                                     className="w-full p-4 rounded-2xl bg-ios-background dark:bg-zinc-800 border-none focus:ring-2 focus:ring-ios-blue min-h-[80px] resize-none dark:text-white"
                                     placeholder="..."
+                                />
+                            </div>
+
+                            {/* Info for Students */}
+                            <div className="pt-2">
+                                <label className="block text-sm font-semibold text-ios-gray mb-1 uppercase px-1">
+                                    {t('info_for_students')}
+                                </label>
+                                <textarea
+                                    value={infoForStudents}
+                                    onChange={(e) => setInfoForStudents(e.target.value)}
+                                    readOnly={isStudent}
+                                    className="w-full p-4 rounded-2xl bg-ios-background dark:bg-zinc-800 border-none focus:ring-2 focus:ring-ios-blue min-h-[80px] resize-none dark:text-white"
+                                    placeholder={t('info_for_students_placeholder') || '...'}
                                 />
                             </div>
                         </div>
@@ -391,58 +419,60 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                     )}
 
                     {/* Action Buttons */}
-                    <div className="space-y-3 pt-2">
-                        {!showReschedule && (
-                            <button
-                                onClick={() => setShowReschedule(true)}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-background dark:bg-zinc-800 font-medium dark:text-white active:scale-[0.98] transition-transform"
-                            >
-                                <Clock className="w-5 h-5 text-ios-blue" />
-                                {t('reschedule') || 'Reschedule'}
-                            </button>
-                        )}
+                    {!isStudent && (
+                        <div className="space-y-3 pt-2">
+                            {!showReschedule && (
+                                <button
+                                    onClick={() => setShowReschedule(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-background dark:bg-zinc-800 font-medium dark:text-white active:scale-[0.98] transition-transform"
+                                >
+                                    <Clock className="w-5 h-5 text-ios-blue" />
+                                    {t('reschedule') || 'Reschedule'}
+                                </button>
+                            )}
 
-                        <button
-                            onClick={handleCancel}
-                            className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-medium active:scale-[0.98] transition-transform ${lesson.status === 'cancelled'
-                                ? 'bg-ios-green/10 text-ios-green'
-                                : 'bg-ios-red/10 text-ios-red'
-                                }`}
-                        >
-                            <Ban className="w-5 h-5" />
-                            {lesson.status === 'cancelled' ? (t('uncancel_lesson') || 'Restore') : (t('cancel_lesson') || 'Skip')}
-                        </button>
-
-                        {!showDeleteConfirm ? (
                             <button
-                                onClick={() => setShowDeleteConfirm(true)}
-                                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-red/10 text-ios-red font-medium active:scale-[0.98] transition-transform"
+                                onClick={handleCancel}
+                                className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-medium active:scale-[0.98] transition-transform ${lesson.status === 'cancelled'
+                                    ? 'bg-ios-green/10 text-ios-green'
+                                    : 'bg-ios-red/10 text-ios-red'
+                                    }`}
                             >
-                                <Trash2 className="w-5 h-5" />
-                                {t('delete_lesson')}
+                                <Ban className="w-5 h-5" />
+                                {lesson.status === 'cancelled' ? (t('uncancel_lesson') || 'Restore') : (t('cancel_lesson') || 'Skip')}
                             </button>
-                        ) : (
-                            <div className="bg-ios-red/10 p-4 rounded-2xl space-y-3">
-                                <p className="text-ios-red text-sm font-medium text-center">
-                                    {t('confirm_delete_lesson')}
-                                </p>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={() => setShowDeleteConfirm(false)}
-                                        className="flex-1 py-3 rounded-xl bg-white dark:bg-zinc-800 font-medium dark:text-white shadow-sm"
-                                    >
-                                        {t('cancel')}
-                                    </button>
-                                    <button
-                                        onClick={handleDelete}
-                                        className="flex-1 py-3 rounded-xl bg-ios-red text-white font-medium shadow-sm"
-                                    >
-                                        {t('confirm_delete')}
-                                    </button>
+
+                            {!showDeleteConfirm ? (
+                                <button
+                                    onClick={() => setShowDeleteConfirm(true)}
+                                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-red/10 text-ios-red font-medium active:scale-[0.98] transition-transform"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                    {t('delete_lesson')}
+                                </button>
+                            ) : (
+                                <div className="bg-ios-red/10 p-4 rounded-2xl space-y-3">
+                                    <p className="text-ios-red text-sm font-medium text-center">
+                                        {t('confirm_delete_lesson')}
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setShowDeleteConfirm(false)}
+                                            className="flex-1 py-3 rounded-xl bg-white dark:bg-zinc-800 font-medium dark:text-white shadow-sm"
+                                        >
+                                            {t('cancel')}
+                                        </button>
+                                        <button
+                                            onClick={handleDelete}
+                                            className="flex-1 py-3 rounded-xl bg-ios-red text-white font-medium shadow-sm"
+                                        >
+                                            {t('confirm_delete')}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

@@ -11,6 +11,7 @@ import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
 import * as api from '../api';
 import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import type { BalanceAuditResult } from '../utils/balance';
+import { TelegramIcon } from './Icons';
 
 interface StudentCardProps {
     isOpen: boolean;
@@ -94,8 +95,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
         await api.update<Student>('students', student.id!, {
             name: editName.trim(),
-            telegram_username: editTelegram.trim() || undefined,
-            instagram_username: editInstagram.trim() || undefined,
+            telegram_username: editTelegram.replace(/@/g, '').trim() || undefined,
+            instagram_username: editInstagram.replace(/@/g, '').trim() || undefined,
             notes: editNotes.trim() || undefined
         });
 
@@ -174,6 +175,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     value={editName}
                                     autoFocus={!student.name}
                                     onChange={(e) => setEditName(e.target.value)}
+                                    readOnly={readOnly}
                                     className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                     placeholder={t('student_name')}
                                 />
@@ -182,11 +184,12 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest px-1">{t('tg_username')}</label>
                                 <div className="flex gap-2 mt-1">
                                     <div className="relative flex-1">
-                                        <AtSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ios-gray" />
+                                        <TelegramIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ios-gray" />
                                         <input
                                             type="text"
                                             value={editTelegram}
                                             onChange={(e) => setEditTelegram(e.target.value)}
+                                            readOnly={readOnly}
                                             className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                             placeholder="username"
                                         />
@@ -198,7 +201,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-2 px-2 text-ios-blue rounded-xl font-bold active:scale-95 transition-transform"
                                         >
-                                            <MessageCircle className="w-4 h-4" />
+                                            <TelegramIcon className="w-4 h-4" />
                                             <span className="text-xs uppercase tracking-tight">{t('open_chat')}</span>
                                         </a>
                                     )}
@@ -224,6 +227,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         type="text"
                                         value={editInstagram}
                                         onChange={(e) => setEditInstagram(e.target.value)}
+                                        readOnly={readOnly}
                                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                         placeholder="username"
                                     />
@@ -235,7 +239,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 px-2 text-[#E1306C] rounded-xl font-bold active:scale-95 transition-transform"
                                     >
-                                        <MessageCircle className="w-4 h-4" />
+                                        <Instagram className="w-4 h-4" />
                                         <span className="text-xs uppercase tracking-tight">{t('open_chat')}</span>
                                     </a>
                                 )}
@@ -249,6 +253,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <textarea
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
+                                    readOnly={readOnly}
                                     className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none"
                                     placeholder={t('note') || 'Note'}
                                     rows={2}
@@ -274,15 +279,17 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             style={{ backgroundColor: group.color }}
                                         />
                                         <span className="text-sm font-medium dark:text-white">{group.name}</span>
-                                        <button
-                                            onClick={async () => {
-                                                await removeStudentFromGroup(student.id!, group.id!);
-                                                await refreshStudentGroups();
-                                            }}
-                                            className="p-1 text-ios-gray hover:text-ios-red"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
+                                        {!readOnly && (
+                                            <button
+                                                onClick={async () => {
+                                                    await removeStudentFromGroup(student.id!, group.id!);
+                                                    await refreshStudentGroups();
+                                                }}
+                                                className="p-1 text-ios-gray hover:text-ios-red"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
 
@@ -410,13 +417,15 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             <CreditCard className="w-3.5 h-3.5" />
                                             <h3 className="text-[10px] font-black uppercase tracking-widest">{t('passes')}</h3>
                                         </div>
-                                        <button
-                                            onClick={() => setIsBuyModalOpen(true)}
-                                            className="flex items-center gap-1 text-ios-blue text-xs font-bold active:scale-95 transition-transform"
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                            {t('add')}
-                                        </button>
+                                        {!readOnly && (
+                                            <button
+                                                onClick={() => setIsBuyModalOpen(true)}
+                                                className="flex items-center gap-1 text-ios-blue text-xs font-bold active:scale-95 transition-transform"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                {t('add')}
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div className="space-y-3">

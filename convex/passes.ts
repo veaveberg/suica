@@ -11,14 +11,59 @@ export const get = query({
             return await ctx.db.query("passes").collect();
         }
 
+        const passes = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned passes
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("passes")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const p of owned) {
+                if (!seenIds.has(p._id)) {
+                    passes.push(p);
+                    seenIds.add(p._id);
+                }
+            }
         }
 
-        return [];
+        // 2. Find all student records for this user (they might be students of multiple teachers)
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const studentRec of myStudentRecords) {
+            // Get all passes from this teacher
+            const teacherPasses = await ctx.db
+                .query("passes")
+                .withIndex("by_user", (q) => q.eq("userId", studentRec.userId))
+                .collect();
+
+            for (const p of teacherPasses) {
+                if (!seenIds.has(p._id)) {
+                    passes.push(p);
+                    seenIds.add(p._id);
+                }
+            }
+        }
+
+        const passesWithTeacher = [];
+        for (const p of passes) {
+            const owner = await ctx.db
+                .query("users")
+                .withIndex("by_token", q => q.eq("tokenIdentifier", p.userId))
+                .first();
+            passesWithTeacher.push({
+                ...p,
+                teacherName: owner?.name || "Teacher",
+                teacherUsername: owner?.username,
+                teacherInstagram: owner?.instagram_username
+            });
+        }
+
+        return passesWithTeacher;
     },
 });
 

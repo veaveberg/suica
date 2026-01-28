@@ -75,9 +75,9 @@ function App() {
     );
   }
 
-  if (convexUser?.role === 'student') {
-    return <StudentPortal />
-  }
+  // if (convexUser?.role === 'student') {
+  //   return <StudentPortal />
+  // }
 
   return (
     <TeacherApp

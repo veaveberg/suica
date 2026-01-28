@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, UserPlus } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import * as api from '../api';
 import type { Student, Subscription } from '../types';
@@ -20,6 +21,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     const [search, setSearch] = useState('');
     const [isCardOpen, setIsCardOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isStudent = convexUser?.role === 'student';
+    const isAdmin = convexUser?.role === 'admin';
 
     const { groups, studentGroups, refreshStudents, refreshSubscriptions, attendance, lessons } = useData();
     const activeGroups = groups.filter(g => g.status === 'active');
@@ -81,12 +85,14 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     />
                 </div>
                 {/* Add Button */}
-                <button
-                    onClick={openCreateMode}
-                    className="p-3 rounded-2xl bg-ios-blue text-white active:scale-90 transition-transform"
-                >
-                    <UserPlus className="w-5 h-5" />
-                </button>
+                {!isStudent && (
+                    <button
+                        onClick={openCreateMode}
+                        className="p-3 rounded-2xl bg-ios-blue text-white active:scale-90 transition-transform"
+                    >
+                        <UserPlus className="w-5 h-5" />
+                    </button>
+                )}
             </div>
 
             {/* Students List */}
@@ -180,6 +186,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 subscriptions={subscriptions}
                 onClose={() => setIsCardOpen(false)}
                 onBuySubscription={handleBuySubscription}
+                readOnly={!isAdmin && (isStudent || (selectedStudent && !!currentTgId && selectedStudent.userId !== String(currentTgId)))}
             />
         </div>
     );

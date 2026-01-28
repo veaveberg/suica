@@ -111,6 +111,10 @@ const CalendarExportSection = ({ t, userId }: { t: any, userId?: string }) => {
     );
 };
 
+import { ProfileDetailSheet } from './ProfileDetailSheet';
+
+// ... existing imports
+
 export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     isOpen,
     onClose,
@@ -124,6 +128,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [confirmClear, setConfirmClear] = useState(false);
     const [showDangerZone, setShowDangerZone] = useState(false);
     const [showCalendars, setShowCalendars] = useState(false);
+    const [showProfileSheet, setShowProfileSheet] = useState(false);
 
     const { data: calendars = [] } = useExternalCalendars();
     const [showAddCalendar, setShowAddCalendar] = useState(false);
@@ -133,16 +138,9 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
     const { firstName, logout, convexUser, onAuth } = useTelegram();
-    const updateNameMutation = useMutation(api.users.updateName);
-    const [isEditingName, setIsEditingName] = useState(false);
-    const [tempName, setTempName] = useState('');
-    const [customUserId, setCustomUserId] = useState('');
+    const me = useQuery(api.users.getMe, convexUser?._id ? { userId: convexUser._id as any } : "skip");
 
-    const handleSaveName = async () => {
-        if (!tempName.trim() || !convexUser?._id) return;
-        await updateNameMutation({ userId: convexUser._id as any, name: tempName });
-        setIsEditingName(false);
-    };
+    const [customUserId, setCustomUserId] = useState('');
 
     if (!isOpen) return null;
 
@@ -277,46 +275,30 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                             <span className="text-ios-blue font-bold">{firstName?.[0] || 'U'}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                            {isEditingName ? (
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        value={tempName}
-                                        onChange={(e) => setTempName(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
-                                        className="w-full bg-white dark:bg-zinc-700 px-2 py-1 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-ios-blue"
-                                    />
-                                    <button onClick={handleSaveName} className="p-1 text-ios-blue"><Check className="w-4 h-4" /></button>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 group">
-                                    <span className="font-medium dark:text-white truncate">{firstName || t('user')}</span>
-                                    <button
-                                        onClick={() => {
-                                            setTempName(firstName || '');
-                                            setIsEditingName(true);
-                                        }}
-                                        className="p-1 text-ios-gray hover:text-ios-blue opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <Pencil className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            )}
+                            <span className="font-medium dark:text-white truncate block">{firstName || t('user')}</span>
                             <p className="text-xs text-ios-gray">{t('logged_in_via_telegram') || 'Logged in via Telegram'}</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => {
-                            if (confirm(t('confirm_logout'))) {
-                                logout();
-                            }
-                        }}
-                        className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors shrink-0"
-                        title={t('logout')}
-                    >
-                        <LogOut className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowProfileSheet(true)}
+                            className="p-2 text-ios-blue hover:bg-ios-blue/10 rounded-xl transition-colors shrink-0"
+                            title={t('edit_profile')}
+                        >
+                            <Pencil className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (confirm(t('confirm_logout'))) {
+                                    logout();
+                                }
+                            }}
+                            className="p-2 text-ios-red hover:bg-ios-red/10 rounded-xl transition-colors shrink-0"
+                            title={t('logout')}
+                        >
+                            <LogOut className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -568,6 +550,12 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                 </div>
                 {showDangerZone ? renderDangerZone() : showCalendars ? renderCalendarsPage() : renderMainSettings()}
             </div>
+
+            <ProfileDetailSheet
+                isOpen={showProfileSheet}
+                onClose={() => setShowProfileSheet(false)}
+                user={me}
+            />
         </div>
     );
 };

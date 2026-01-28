@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CheckCircle2, Ban, Users, Circle, Trash2, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student } from '../types';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import { useData } from '../DataProvider';
@@ -25,7 +26,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     const { t, i18n } = useTranslation();
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [pastLessonsCount, setPastLessonsCount] = useState(BATCH_SIZE);
-    const { lessons: dataLessons, groups, studentGroups, students, refreshLessons, externalCalendars } = useData();
+    const { lessons: dataLessons, groups, studentGroups, students, refreshLessons, externalCalendars, attendance } = useData();
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isStudent = convexUser?.role === 'student';
+
+    // Current user's student IDs across all schools they might be in
+    const myStudentIds = useMemo(() => {
+        if (!currentTgId) return [];
+        return students
+            .filter(s => s.telegram_id === String(currentTgId))
+            .map(s => String(s.id));
+    }, [students, currentTgId]);
 
     // Prioritize lessons from useData, but fallback to props if needed for some reason
     const lessons = dataLessons || fallbackLessons;
@@ -352,6 +363,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
         const isCancelled = lesson.status === 'cancelled';
         const isCompleted = lesson.status === 'completed';
         const isSelected = selectedIds.has(String(lesson.id));
+        const isAdmin = convexUser?.role === 'admin';
+        const isOwner = lesson.userId === String(currentTgId);
+        const canManageLesson = isAdmin || (!isStudent && (!currentTgId || isOwner));
 
         // Check if lesson time has passed (for showing "Mark" in blue)
         const now = new Date();
@@ -361,7 +375,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
         return (
             <div key={lesson.id} className="space-y-2">
                 <div className="flex items-center gap-3">
-                    {isSelectionMode && (
+                    {isSelectionMode && canManageLesson && (
                         <button
                             onClick={() => toggleLessonSelection(String(lesson.id))}
                             className="p-1 active:scale-90 transition-transform"
@@ -373,11 +387,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                             )}
                         </button>
                     )}
+                    {isSelectionMode && !canManageLesson && (
+                        <div className="w-8 flex-shrink-0" />
+                    )}
                     <button
                         onClick={() => {
                             if (isSelectionMode) {
-                                toggleLessonSelection(String(lesson.id));
-                            } else {
+                                if (canManageLesson) toggleLessonSelection(String(lesson.id));
+                            } else if (isAdmin || isOwner) {
                                 setSelectedLesson(lesson);
                             }
                         }}
@@ -386,7 +403,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                             isToday && !isCancelled && !isSelectionMode && "ring-2 ring-ios-blue shadow-lg",
                             isCancelled && "opacity-50",
                             isSelected && "bg-ios-blue/5 border-ios-blue/30 dark:bg-ios-blue/10 dark:border-ios-blue/30 scale-[0.98]",
-                            !isSelectionMode && "active:scale-[0.98]"
+                            !isSelectionMode && (isAdmin || isOwner) ? "active:scale-[0.98]" : "cursor-default"
                         )}
                     >
                         {/* Title row with status */}
@@ -410,15 +427,48 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                             <Ban className="w-4 h-4" />
                                             {t('skipped')}
                                         </span>
-                                    ) : isCompleted ? (
-                                        <span className="flex items-center gap-1 text-ios-green text-sm font-medium">
-                                            <CheckCircle2 className="w-4 h-4" />
-                                            {t('completed')}
-                                        </span>
-                                    ) : needsMarking ? (
+                                    ) : isCompleted ? (() => {
+                                        // Student perspective: show specific attendance if available
+                                        if (isStudent || !isOwner) {
+                                            const userAttendance = attendance.find(a =>
+                                                String(a.lesson_id) === String(lesson.id) &&
+                                                myStudentIds.includes(String(a.student_id))
+                                            );
+
+                                            if (userAttendance) {
+                                                const status = userAttendance.status;
+                                                const statusColor = status === 'present' ? 'text-ios-green' :
+                                                    status === 'absence_invalid' ? 'text-ios-red' :
+                                                        status === 'absence_valid' ? 'text-ios-blue' : 'text-ios-gray';
+
+                                                return (
+                                                    <span className={cn("flex items-center gap-1 text-sm font-medium", statusColor)}>
+                                                        {status === 'present' ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                                                        {t(`attendance_${status}`)}
+                                                    </span>
+                                                );
+                                            }
+
+                                            // If completed but no attendance record for this student
+                                            return (
+                                                <span className="flex items-center gap-1 text-ios-gray text-sm font-medium">
+                                                    <Circle className="w-4 h-4" />
+                                                    {t('not_marked')}
+                                                </span>
+                                            );
+                                        }
+
+                                        // Teacher perspective: just 'Completed'
+                                        return (
+                                            <span className="flex items-center gap-1 text-ios-green text-sm font-medium">
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                {t('completed')}
+                                            </span>
+                                        );
+                                    })() : needsMarking ? (
                                         <span className="flex items-center gap-1 text-ios-blue text-sm font-medium">
                                             <Circle className="w-4 h-4" />
-                                            {t('needs_marking')}
+                                            {(isStudent || !isOwner) ? t('not_marked') : t('needs_marking')}
                                         </span>
                                     ) : (
                                         <span className="text-ios-orange text-sm font-medium">
@@ -430,17 +480,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                         </div>
                         {/* Time row - full width */}
                         <div className="flex items-baseline justify-between text-ios-gray text-sm pl-7">
-                            <div className="flex items-center gap-1">
-                                <span>{formatTimeRange(lesson.time, lesson.duration_minutes)}, {lesson.duration_minutes} {t('minutes')}</span>
-                            </div>
-                            {!isSelectionMode && (
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                    <div className="flex items-center gap-1">
-                                        <Users className="w-4 h-4" />
-                                        <span>{lesson.students_count || 0}/{getGroupMemberCount(lesson.group_id)}</span>
-                                    </div>
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                                <div className="flex items-center gap-1">
+                                    <span>{formatTimeRange(lesson.time, lesson.duration_minutes)}, {lesson.duration_minutes} {t('minutes')}{(isStudent || !isOwner) && lesson.teacherName ? `, ${lesson.teacherName}` : ''}</span>
                                 </div>
-                            )}
+                                {(isAdmin || isOwner) && lesson.notes && (
+                                    <div className="text-ios-gray font-medium text-sm">
+                                        {lesson.notes}
+                                    </div>
+                                )}
+                                {lesson.info_for_students && (
+                                    <div className="text-ios-orange font-medium text-sm">
+                                        {lesson.info_for_students}
+                                    </div>
+                                )}
+                            </div>
+                            {!isSelectionMode && (() => {
+                                const isOwner = lesson.userId === String(currentTgId);
+                                const isStudentInContext = isStudent || !isOwner;
+
+                                if (isStudentInContext) return null;
+
+                                return (
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        <div className="flex items-center gap-1">
+                                            <Users className="w-4 h-4" />
+                                            <span>{lesson.students_count || 0}/{getGroupMemberCount(lesson.group_id)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </button>
                 </div>
@@ -513,7 +582,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
             </div>
 
             {/* Selection Toolbar */}
-            {isSelectionMode && (
+            {isSelectionMode && !isStudent && (
                 <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-300">
                     <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-gray-200 dark:border-zinc-800 rounded-3xl p-4 shadow-2xl flex items-center justify-between">
                         <div className="flex flex-col">

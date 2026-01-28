@@ -12,32 +12,57 @@ export const get = query({
             return await ctx.db.query("groups").collect();
         }
 
+        const groups = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned groups
         if (user.role === "teacher") {
-            // Teacher sees only their groups
-            return await ctx.db
+            const owned = await ctx.db
                 .query("groups")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const g of owned) {
+                if (!seenIds.has(g._id)) {
+                    groups.push(g);
+                    seenIds.add(g._id);
+                }
+            }
         }
 
-        if (user.role === "student") {
-            if (!user.studentId) return [];
-            // Student sees groups they are part of
-            const studentGroups = await ctx.db
-                .query("student_groups")
-                .withIndex("by_student_group", (q) => q.eq("student_id", user.studentId!))
+        // 2. Find all student records for this user (they might be students of multiple teachers)
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const studentRec of myStudentRecords) {
+            // Get all groups from this teacher
+            const teacherGroups = await ctx.db
+                .query("groups")
+                .withIndex("by_user", (q) => q.eq("userId", studentRec.userId))
                 .collect();
 
-            const groupIds = studentGroups.map(sg => sg.group_id);
-            const groups = [];
-            for (const gid of groupIds) {
-                const g = await ctx.db.get(gid);
-                if (g) groups.push(g);
+            for (const g of teacherGroups) {
+                if (!seenIds.has(g._id)) {
+                    groups.push(g);
+                    seenIds.add(g._id);
+                }
             }
-            return groups;
         }
 
-        return [];
+        const groupsWithTeacher = [];
+        for (const g of groups) {
+            const owner = await ctx.db
+                .query("users")
+                .withIndex("by_token", q => q.eq("tokenIdentifier", g.userId))
+                .first();
+            groupsWithTeacher.push({
+                ...g,
+                teacherName: owner?.name || "Teacher"
+            });
+        }
+
+        return groupsWithTeacher;
     },
 });
 

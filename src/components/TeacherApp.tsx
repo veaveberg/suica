@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Book, Layers, Users, Calendar, Settings, CreditCard } from 'lucide-react'
+import { useTelegram } from './TelegramProvider'
 
 import { Dashboard } from './Dashboard'
 import { CalendarView } from './CalendarView'
@@ -31,6 +32,8 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
 }) => {
     const { t } = useTranslation()
     const { getParam, setParam } = useSearchParams()
+    const { convexUser } = useTelegram()
+    const isStudentGlobal = convexUser?.role === 'student'
 
     // Sync Active Tab
     const tabParam = getParam('tab') as TabId | null
@@ -71,7 +74,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         { id: 'passes', icon: CreditCard, label: t('passes') },
         { id: 'students', icon: Users, label: t('students') },
         { id: 'calendar', icon: Calendar, label: t('calendar') },
-    ]
+    ].filter(tab => !isStudentGlobal || tab.id !== 'students')
 
     // Reset selection when changing tabs
     useEffect(() => {
@@ -151,7 +154,10 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
 
             {/* Bottom Tab Bar */}
             <nav
-                className="shrink-0 z-40 grid grid-cols-5 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-zinc-800"
+                className={cn(
+                    "shrink-0 z-40 grid bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl border-t border-gray-200 dark:border-zinc-800",
+                    isStudentGlobal ? "grid-cols-4" : "grid-cols-5"
+                )}
                 style={{
                     paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
                     paddingTop: '8px',

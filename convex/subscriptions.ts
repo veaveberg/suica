@@ -11,22 +11,43 @@ export const get = query({
             return await ctx.db.query("subscriptions").collect();
         }
 
+        const subscriptions = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned subscriptions
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("subscriptions")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const s of owned) {
+                if (!seenIds.has(s._id)) {
+                    subscriptions.push(s);
+                    seenIds.add(s._id);
+                }
+            }
         }
 
-        if (user.role === "student" && user.studentId) {
-            // Students see their own subscriptions
-            return await ctx.db
+        // 2. Find all student records for this user (they might be students of multiple teachers)
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const studentRec of myStudentRecords) {
+            const mySubs = await ctx.db
                 .query("subscriptions")
-                .filter(q => q.eq(q.field("user_id"), user.studentId))
+                .filter(q => q.eq(q.field("user_id"), studentRec._id))
                 .collect();
+            for (const s of mySubs) {
+                if (!seenIds.has(s._id)) {
+                    subscriptions.push(s);
+                    seenIds.add(s._id);
+                }
+            }
         }
 
-        return [];
+        return subscriptions;
     },
 });
 

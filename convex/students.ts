@@ -11,22 +11,37 @@ export const get = query({
             return await ctx.db.query("students").collect();
         }
 
+        const students = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned students
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("students")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const s of owned) {
+                if (!seenIds.has(s._id)) {
+                    students.push(s);
+                    seenIds.add(s._id);
+                }
+            }
         }
 
-        // Students only see themselves (or nothing, depending on privacy requirements)
-        // Actually, usually students don't need to fetch a list of "all students".
-        // They might need to fetch their own profile.
-        if (user.role === "student" && user.studentId) {
-            const me = await ctx.db.get(user.studentId);
-            return me ? [me] : [];
+        // 2. Find all student records for this user (they might be students of multiple teachers)
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const s of myStudentRecords) {
+            if (!seenIds.has(s._id)) {
+                students.push(s);
+                seenIds.add(s._id);
+            }
         }
 
-        return [];
+        return students;
     },
 });
 
@@ -35,6 +50,7 @@ export const create = mutation({
         userId: v.id("users"),
         name: v.string(),
         telegram_username: v.optional(v.string()),
+        telegram_id: v.optional(v.string()),
         instagram_username: v.optional(v.string()),
         notes: v.optional(v.string()),
     },
@@ -44,6 +60,7 @@ export const create = mutation({
         return await ctx.db.insert("students", {
             name: args.name,
             telegram_username: args.telegram_username,
+            telegram_id: args.telegram_id,
             instagram_username: args.instagram_username,
             notes: args.notes,
             userId: user.tokenIdentifier,
@@ -58,6 +75,7 @@ export const update = mutation({
         updates: v.object({
             name: v.optional(v.string()),
             telegram_username: v.optional(v.string()),
+            telegram_id: v.optional(v.string()),
             instagram_username: v.optional(v.string()),
             notes: v.optional(v.string()),
             balance_notes: v.optional(v.string()),

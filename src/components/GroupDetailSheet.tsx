@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 import { updateGroup, archiveGroup, restoreGroup, deleteGroup, addScheduleSlot, deleteScheduleSlot, updateScheduleSlot, addStudentToGroup, removeStudentFromGroup, generateFutureLessons, syncLessonsFromSchedule } from '../db-server';
 import { X, Trash2, Archive, RotateCcw, Plus, Calendar, Users, AlignCenterHorizontal } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import { StudentSelector } from './StudentSelector';
 import type { Group } from '../types';
 import { GROUP_COLORS } from '../constants/colors';
@@ -43,6 +44,11 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
     const [isSyncing, setIsSyncing] = useState(false);
     const [showAlignSuccess, setShowAlignSuccess] = useState(false);
     const [showAddLessonsSuccess, setShowAddLessonsSuccess] = useState(false);
+
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isAdmin = convexUser?.role === 'admin';
+    const isOwner = group?.userId === String(currentTgId);
+    const isStudent = !isAdmin && (convexUser?.role === 'student' || (group && !!currentTgId && !isOwner));
 
     const { schedules: allSchedules, students: allStudents, studentGroups, refreshAll } = useData();
 
@@ -175,12 +181,12 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                     <h2 className="font-bold text-lg dark:text-white">
                         {isArchived ? t('archived_group') : t('edit_group')}
                     </h2>
-                    {!isArchived && (
+                    {!isArchived && !isStudent && (
                         <button onClick={handleSave} className="text-ios-blue font-semibold">
                             {t('save')}
                         </button>
                     )}
-                    {isArchived && <div className="w-12" />}
+                    {(isArchived || isStudent) && <div className="w-12" />}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -191,7 +197,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            disabled={isArchived}
+                            disabled={isArchived || isStudent}
                             className="w-full mt-1 px-4 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white disabled:opacity-50"
                         />
                     </div>
@@ -203,10 +209,10 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                             {GROUP_COLORS.map(c => (
                                 <button
                                     key={c}
-                                    onClick={() => !isArchived && setColor(c)}
+                                    onClick={() => !isArchived && !isStudent && setColor(c)}
                                     className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-ios-blue' : ''}`}
                                     style={{ backgroundColor: c }}
-                                    disabled={isArchived}
+                                    disabled={isArchived || isStudent}
                                 />
                             ))}
                         </div>
@@ -221,12 +227,14 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                         <div>
                             <div className="flex items-center justify-between">
                                 <label className="text-sm text-ios-gray uppercase tracking-wider">{t('template_schedule')}</label>
-                                <button
-                                    onClick={() => setAddingSlot(true)}
-                                    className="text-ios-blue"
-                                >
-                                    <Plus className="w-5 h-5" />
-                                </button>
+                                {!isStudent && (
+                                    <button
+                                        onClick={() => setAddingSlot(true)}
+                                        className="text-ios-blue"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-2 mt-2">
@@ -330,15 +338,17 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                                                         })()}, {(schedule.frequency_weeks || 1) > 1 ? t(`every_${schedule.frequency_weeks}nd_week`) : t('every_week')}
                                                     </span>
                                                 </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteSlot(schedule.id!);
-                                                    }}
-                                                    className="text-ios-red p-1 pl-4"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                {!isStudent && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSlot(schedule.id!);
+                                                        }}
+                                                        className="text-ios-red p-1 pl-4"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -462,12 +472,14 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                                     <Users className="w-4 h-4" />
                                     {t('students')} ({members.length})
                                 </label>
-                                <button
-                                    onClick={() => setShowStudentSelector(true)}
-                                    className="text-ios-blue"
-                                >
-                                    <Plus className="w-5 h-5" />
-                                </button>
+                                {!isStudent && (
+                                    <button
+                                        onClick={() => setShowStudentSelector(true)}
+                                        className="text-ios-blue"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </button>
+                                )}
                             </div>
 
                             <div className="space-y-2 mt-2">
@@ -477,12 +489,14 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                                         className="flex items-center justify-between p-3 bg-ios-background dark:bg-zinc-800 rounded-xl"
                                     >
                                         <span className="dark:text-white">{student.name}</span>
-                                        <button
-                                            onClick={() => removeStudentFromGroup(student.id!, group.id!)}
-                                            className="text-ios-gray hover:text-ios-red p-1"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
+                                        {!isStudent && (
+                                            <button
+                                                onClick={() => removeStudentFromGroup(student.id!, group.id!)}
+                                                className="text-ios-gray hover:text-ios-red p-1"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        )}
                                     </div>
                                 ))}
 
@@ -502,7 +516,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                     initialSelectedIds={memberIds}
                 />     {/* Footer Actions Inline */}
                 <div className="pt-4 border-t border-gray-100 dark:border-zinc-800/50">
-                    {!isArchived && (
+                    {!isArchived && !isStudent && (
                         <button
                             onClick={handleArchive}
                             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ios-gray/10 text-ios-gray font-semibold active:opacity-60 transition-opacity"

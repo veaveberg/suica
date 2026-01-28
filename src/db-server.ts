@@ -98,6 +98,7 @@ export async function updateGroup(groupId: string, updates: Partial<Group>): Pro
     const allowedUpdates = {
         name: updates.name,
         status: updates.status,
+        color: updates.color,
         last_class_date: updates.last_class_date ? updates.last_class_date : undefined
     };
 

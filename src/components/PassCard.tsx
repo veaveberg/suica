@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, Sparkles } from 'lucide-react';
 import type { Pass, Group } from '../types';
 import { getPassDisplayName } from '../utils/passUtils';
+import { cn } from '../utils/cn';
 
 interface PassCardProps {
     pass: Pass;
@@ -30,10 +31,15 @@ export const PassCard: React.FC<PassCardProps> = ({
     const { t, i18n } = useTranslation();
     const displayPrice = priceOverride !== undefined ? priceOverride : pass.price;
 
+    const CardComponent = showChevron ? 'button' : 'div';
+
     return (
-        <button
-            onClick={onClick}
-            className="w-full bg-ios-card dark:bg-zinc-900 p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-[0.98] transition-transform text-left border border-gray-100 dark:border-zinc-800"
+        <CardComponent
+            onClick={showChevron ? onClick : undefined}
+            className={cn(
+                "w-full bg-ios-card dark:bg-zinc-900 p-4 rounded-2xl flex items-center justify-between shadow-sm transition-transform text-left border border-gray-100 dark:border-zinc-800",
+                showChevron ? "active:scale-[0.98]" : "cursor-text scale-100 select-text"
+            )}
         >
             <div className="flex items-center gap-4 min-w-0">
                 {/* Postage Stamp Icon */}
@@ -136,6 +142,6 @@ export const PassCard: React.FC<PassCardProps> = ({
                 </div>
             </div>
             {showChevron && <ChevronRight className="w-5 h-5 text-ios-gray/30 flex-shrink-0" />}
-        </button>
+        </CardComponent>
     );
 };

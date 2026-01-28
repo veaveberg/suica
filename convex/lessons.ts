@@ -11,39 +11,69 @@ export const get = query({
             return await ctx.db.query("lessons").collect();
         }
 
+        const lessons = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned lessons
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("lessons")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const l of owned) {
+                if (!seenIds.has(l._id)) {
+                    lessons.push(l);
+                    seenIds.add(l._id);
+                }
+            }
         }
 
-        if (user.role === "student" && user.studentId) {
-            // Students see lessons for groups they are in.
-            // First get student groups
+        // 2. Find all student records for this user (they might be students of multiple teachers)
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const studentRec of myStudentRecords) {
             const studentGroups = await ctx.db
                 .query("student_groups")
-                .withIndex("by_student_group", (q) => q.eq("student_id", user.studentId!))
+                .withIndex("by_student_group", (q) => q.eq("student_id", studentRec._id))
                 .collect();
-            const groupIds = studentGroups.map(sg => sg.group_id);
 
-            // Fetch lessons for these groups
-            // This is inefficient (N queries), but for MVP it works.
-            // Optimization: Use `Promise.all` or `filter` on all lessons if data set is small.
-            // For now, let's fetch all lessons and filter in memory since we lack "in" operator support in indexes well.
-            // Actually, better to query by group if number of groups is small.
-            const lessons = [];
+            // Threshold: 5 days before the student was added
+            const addedTime = studentRec._creationTime;
+            const buffer = 5 * 24 * 60 * 60 * 1000;
+            const thresholdDate = new Date(addedTime - buffer).toISOString().split('T')[0];
+
+            const groupIds = studentGroups.map(sg => sg.group_id);
             for (const gid of groupIds) {
                 const groupLessons = await ctx.db
                     .query("lessons")
-                    .withIndex("by_group_date", q => q.eq("group_id", gid))
-                    .take(100); // Limit?
-                lessons.push(...groupLessons);
+                    .withIndex("by_group_date", q => q.eq("group_id", gid).gte("date", thresholdDate))
+                    .collect();
+
+                for (const l of groupLessons) {
+                    if (!seenIds.has(l._id)) {
+                        lessons.push(l);
+                        seenIds.add(l._id);
+                    }
+                }
             }
-            return lessons;
         }
 
-        return [];
+        const lessonsWithTeacher = [];
+        for (const l of lessons) {
+            const owner = await ctx.db
+                .query("users")
+                .withIndex("by_token", q => q.eq("tokenIdentifier", l.userId))
+                .first();
+            lessonsWithTeacher.push({
+                ...l,
+                teacherName: owner?.name || "Teacher"
+            });
+        }
+
+        return lessonsWithTeacher;
     },
 });
 
@@ -58,6 +88,7 @@ export const create = mutation({
         schedule_id: v.optional(v.id("schedules")),
         students_count: v.optional(v.number()), // Calculated?
         total_amount: v.optional(v.number()),
+        info_for_students: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const user = await ensureTeacher(ctx, args.userId);
@@ -71,6 +102,7 @@ export const create = mutation({
             schedule_id: args.schedule_id,
             students_count: args.students_count || 0,
             total_amount: args.total_amount || 0,
+            info_for_students: args.info_for_students,
             userId: user.tokenIdentifier,
         });
     },
@@ -89,6 +121,7 @@ export const update = mutation({
             students_count: v.optional(v.number()),
             total_amount: v.optional(v.number()),
             notes: v.optional(v.string()),
+            info_for_students: v.optional(v.string()),
         }),
     },
     handler: async (ctx, args) => {
@@ -135,6 +168,7 @@ export const bulkCreate = mutation({
             schedule_id: v.optional(v.id("schedules")),
             students_count: v.optional(v.number()),
             total_amount: v.optional(v.number()),
+            info_for_students: v.optional(v.string()),
         }))
     },
     handler: async (ctx, args) => {
@@ -200,16 +234,16 @@ export const syncFromSchedule = mutation({
             // Target slots generation
             const targetSlots: { date: string, time: string, duration: number, scheduleId: any }[] = [];
             const todayDate = new Date(args.today);
-            
+
             // Generate until we have at least 8 weeks AND enough slots for all existing lessons
             let daysToCheck = 56;
             const minSlotsNeeded = existingLessons.length;
-            
+
             let d = 0;
             while (d < daysToCheck || targetSlots.length < minSlotsNeeded) {
                 const checkDate = new Date(todayDate.getTime() + d * MS_PER_DAY);
                 const dateStr = checkDate.toISOString().split('T')[0];
-                
+
                 // If we hit group completion date, stop
                 if (group.last_class_date && dateStr > group.last_class_date) break;
 
@@ -231,7 +265,7 @@ export const syncFromSchedule = mutation({
                         scheduleId: slot._id
                     });
                 }
-                
+
                 d++;
                 if (d > 365) break; // Safety break
             }

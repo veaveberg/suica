@@ -3,8 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 import { createGroup } from '../db-server';
 import { Plus, ChevronDown, ChevronRight, Archive } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
 import { GroupDetailSheet } from './GroupDetailSheet';
+import { BalanceAuditSheet } from './BalanceAuditSheet';
+import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
+import { useMemo } from 'react';
 
 import { useSearchParams } from '../hooks/useSearchParams';
 
@@ -13,6 +17,9 @@ export const GroupsView: React.FC = () => {
     const { getParam, setParam } = useSearchParams();
     const [showArchived, setShowArchived] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isStudentGlobal = convexUser?.role === 'student';
+    const isAdmin = convexUser?.role === 'admin';
 
     const isCreating = getParam('sheet') === 'create_group';
     const setIsCreating = (val: boolean) => {
@@ -21,10 +28,36 @@ export const GroupsView: React.FC = () => {
     };
     const [newGroupName, setNewGroupName] = useState('');
 
-    const { groups, schedules, refreshGroups, refreshSchedules, refreshLessons } = useData();
+    const { groups, schedules, students, subscriptions, attendance, lessons, refreshGroups, refreshSchedules, refreshLessons } = useData();
 
     const activeGroups = groups.filter(g => g.status === 'active');
     const archivedGroups = groups.filter(g => g.status === 'archived');
+
+    const isOwner = selectedGroup?.userId === String(currentTgId);
+    const shouldShowAudit = selectedGroup && !isAdmin && (isStudentGlobal || !isOwner);
+
+    const auditData = useMemo(() => {
+        if (!shouldShowAudit || !selectedGroup || !currentTgId) return null;
+
+        // Find the student record for this user under this teacher (group owner)
+        const studentRec = students.find(s =>
+            s.telegram_id === String(currentTgId) &&
+            s.userId === selectedGroup.userId
+        );
+
+        if (!studentRec?.id) return null;
+
+        return {
+            result: calculateStudentGroupBalanceWithAudit(
+                studentRec.id,
+                selectedGroup.id!,
+                subscriptions,
+                attendance,
+                lessons
+            ),
+            studentSubscriptions: subscriptions.filter(s => String(s.user_id) === String(studentRec.id))
+        };
+    }, [shouldShowAudit, selectedGroup, currentTgId, students, subscriptions, attendance, lessons]);
 
     const getScheduleSummary = (group: Group) => {
         const groupSchedules = schedules.filter(s => String(s.group_id) === String(group.id) && s.is_active);
@@ -75,7 +108,7 @@ export const GroupsView: React.FC = () => {
     return (
         <div className="p-4">
             {/* Create New Group Button */}
-            {!isCreating && (
+            {!isCreating && !isStudentGlobal && (
                 <button
                     onClick={() => setIsCreating(true)}
                     className="w-full flex items-center justify-center gap-2 p-4 mb-4 bg-ios-blue/10 text-ios-blue rounded-2xl font-semibold active:scale-[0.98] transition-transform"
@@ -123,19 +156,21 @@ export const GroupsView: React.FC = () => {
                     <button
                         key={group.id}
                         onClick={() => setSelectedGroup(group)}
-                        className="w-full flex items-center gap-3 p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
+                        className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
                     >
-                        <div
-                            className="w-4 h-4 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: group.color }}
-                        />
                         <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold dark:text-white truncate">{group.name}</h3>
-                            <p className="text-sm text-ios-gray truncate">
-                                {getScheduleSummary(group)}
+                            <div className="flex items-center gap-3 mb-1">
+                                <div
+                                    className="w-4 h-4 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: group.color }}
+                                />
+                                <h3 className="text-xl font-bold dark:text-white leading-none truncate">{group.name}</h3>
+                            </div>
+                            <p className="text-sm text-ios-gray pl-7 truncate">
+                                {isStudentGlobal ? group.teacherName : getScheduleSummary(group)}
                             </p>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0" />
+                        <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0 ml-2" />
                     </button>
                 ))}
 
@@ -178,6 +213,9 @@ export const GroupsView: React.FC = () => {
                                     />
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold dark:text-white truncate">{group.name}</h3>
+                                        {isStudentGlobal && group.teacherName && (
+                                            <p className="text-xs text-ios-gray/70 truncate">{group.teacherName}</p>
+                                        )}
                                     </div>
                                     <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0" />
                                 </button>
@@ -187,12 +225,22 @@ export const GroupsView: React.FC = () => {
                 </div>
             )}
 
-            {/* Group Detail Sheet */}
+            {/* Group Detail Sheet or Balance Audit */}
             {selectedGroup && (
-                <GroupDetailSheet
-                    group={selectedGroup}
-                    onClose={() => setSelectedGroup(null)}
-                />
+                shouldShowAudit && auditData ? (
+                    <BalanceAuditSheet
+                        isOpen={!!selectedGroup}
+                        onClose={() => setSelectedGroup(null)}
+                        auditResult={auditData.result}
+                        group={selectedGroup}
+                        subscriptions={auditData.studentSubscriptions}
+                    />
+                ) : (
+                    <GroupDetailSheet
+                        group={selectedGroup}
+                        onClose={() => setSelectedGroup(null)}
+                    />
+                )
             )}
         </div>
     );

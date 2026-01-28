@@ -5,6 +5,8 @@ export default defineSchema({
     users: defineTable({
         tokenIdentifier: v.string(),
         name: v.optional(v.string()),
+        username: v.optional(v.string()),
+        instagram_username: v.optional(v.string()), // Teacher's IG profile handle (e.g. for button in student view)
         role: v.union(v.literal("admin"), v.literal("teacher"), v.literal("student")),
         studentId: v.optional(v.id("students")),
     }).index("by_token", ["tokenIdentifier"]),
@@ -21,11 +23,15 @@ export default defineSchema({
     students: defineTable({
         name: v.string(),
         telegram_username: v.optional(v.string()),
+        telegram_id: v.optional(v.string()),
         instagram_username: v.optional(v.string()),
         notes: v.optional(v.string()),
         balance_notes: v.optional(v.string()),
         userId: v.string(), // The teacher (owner)
-    }).index("by_user", ["userId"]),
+    })
+        .index("by_user", ["userId"])
+        .index("by_telegram_id", ["telegram_id"])
+        .index("by_telegram_username", ["telegram_username"]),
 
     student_groups: defineTable({
         student_id: v.id("students"),
@@ -60,6 +66,7 @@ export default defineSchema({
         students_count: v.number(),
         total_amount: v.number(),
         notes: v.optional(v.string()),
+        info_for_students: v.optional(v.string()),
         userId: v.string(),
     })
         .index("by_user", ["userId"])

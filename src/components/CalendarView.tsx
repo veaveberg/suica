@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { format, addDays, subMonths, isToday, getDate } from 'date-fns';
 import { ru, ka, enUS } from 'date-fns/locale';
 import { ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import type { Lesson } from '../types';
@@ -18,7 +19,17 @@ interface CalendarViewProps {
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, externalEventsRefresh, isActive }) => {
   const { t, i18n } = useTranslation();
-  const { lessons, groups, studentGroups, students, externalCalendars } = useData();
+  const { lessons, groups, studentGroups, students, externalCalendars, attendance } = useData();
+  const { convexUser, userId: currentTgId } = useTelegram();
+  const isStudentGlobal = convexUser?.role === 'student';
+  const isAdmin = convexUser?.role === 'admin';
+
+  const myStudentIds = useMemo(() => {
+    if (!currentTgId) return [];
+    return students
+      .filter(s => s.telegram_id === String(currentTgId))
+      .map(s => String(s.id));
+  }, [students, currentTgId]);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
@@ -318,12 +329,15 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                     {dayLessons.map(lesson => {
                       const color = getGroupColor(lesson.group_id);
                       const isCancelled = lesson.status === 'cancelled';
+                      const isOwner = lesson.userId === String(currentTgId);
+                      const canOpen = isAdmin || isOwner;
                       return (
                         <button
                           key={lesson.id}
-                          onClick={() => setSelectedLesson(lesson)}
+                          onClick={() => canOpen && setSelectedLesson(lesson)}
                           className={cn(
-                            "text-[9px] text-left px-1 py-0.5 rounded-md transition-transform active:scale-95 leading-tight overflow-hidden",
+                            "text-[9px] text-left px-1 py-0.5 rounded-md transition-transform leading-tight overflow-hidden",
+                            canOpen ? "active:scale-95" : "cursor-default",
                             isCancelled ? "opacity-40" : ""
                           )}
                           style={{
@@ -331,14 +345,49 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             color: isCancelled ? color : '#FFFFFF'
                           }}
                         >
-                          <div className={cn("font-bold truncate", isCancelled && "line-through")}>
+                          <div className={cn("font-bold leading-[1.1]", isCancelled && "line-through")}>
                             {getGroupName(lesson.group_id)}
+                            {(() => {
+                              const isOwner = lesson.userId === String(currentTgId);
+                              const isStudentInContext = isStudentGlobal || !isOwner;
+                              return isStudentInContext && lesson.teacherName ? `, ${lesson.teacherName}` : '';
+                            })()}
                           </div>
                           <div className="opacity-90 truncate">
                             {formatT(lesson.time)}–{formatT(lesson.time, lesson.duration_minutes)}
                           </div>
                           <div className="opacity-70 whitespace-nowrap">
-                            {lesson.students_count || 0}/{getGroupMemberCount(lesson.group_id)}
+                            {(() => {
+                              const isOwner = lesson.userId === String(currentTgId);
+                              const isStudentInContext = isStudentGlobal || !isOwner;
+
+                              if (isStudentInContext) {
+                                const userAttendance = attendance.find(a =>
+                                  String(a.lesson_id) === String(lesson.id) &&
+                                  myStudentIds.includes(String(a.student_id))
+                                );
+
+                                if (userAttendance) {
+                                  return t(`attendance_${userAttendance.status}`);
+                                }
+
+                                if (lesson.status === 'completed') {
+                                  return t('not_marked');
+                                }
+
+                                if (lesson.status === 'upcoming') {
+                                  const now = new Date();
+                                  const lessonDate = new Date(lesson.date);
+                                  if (lessonDate < now) {
+                                    return t('not_marked');
+                                  }
+                                  return t('upcoming');
+                                }
+                              }
+
+                              // Teacher view or fallback
+                              return `${lesson.students_count || 0}/${getGroupMemberCount(lesson.group_id)}`;
+                            })()}
                           </div>
                         </button>
                       );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Trash2, Hash, Clock, Tag, ChevronsRight } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import { createPass, updatePass, deletePass } from '../db-server';
 import type { Pass } from '../types';
@@ -15,6 +16,10 @@ interface PassDetailSheetProps {
 export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClose, pass }) => {
     const { t } = useTranslation();
     const { groups, passGroups, refreshPasses, refreshPassGroups } = useData();
+    const { convexUser, userId: currentTgId } = useTelegram();
+    const isAdmin = convexUser?.role === 'admin';
+    const isOwner = pass?.userId === String(currentTgId);
+    const isStudent = !isAdmin && (convexUser?.role === 'student' || (pass && !!currentTgId && !isOwner));
 
     const [name, setName] = useState('');
     const [price, setPrice] = useState('');
@@ -101,13 +106,17 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                     <h2 className="text-lg font-bold dark:text-white">
                         {pass ? t('edit_pass') : t('create_pass')}
                     </h2>
-                    <button
-                        onClick={handleSave}
-                        disabled={!price || !lessonsCount}
-                        className="text-ios-blue font-bold disabled:opacity-30"
-                    >
-                        {t('save')}
-                    </button>
+                    {!isStudent ? (
+                        <button
+                            onClick={handleSave}
+                            disabled={!price || !lessonsCount}
+                            className="text-ios-blue font-bold disabled:opacity-30"
+                        >
+                            {t('save')}
+                        </button>
+                    ) : (
+                        <div className="w-12" />
+                    )}
                 </div>
 
                 {/* Content */}
@@ -122,6 +131,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
+                                readOnly={isStudent}
                                 placeholder={t('pass_nickname')}
                                 className="flex-1 bg-transparent border-none focus:ring-0 font-medium dark:text-white"
                             />
@@ -135,6 +145,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                                 type="number"
                                 value={price}
                                 onChange={(e) => setPrice(e.target.value)}
+                                readOnly={isStudent}
                                 placeholder={t('price')}
                                 className="flex-1 bg-transparent border-none focus:ring-0 font-medium dark:text-white"
                             />
@@ -148,13 +159,14 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                                 type="number"
                                 value={lessonsCount}
                                 onChange={(e) => setLessonsCount(e.target.value)}
+                                readOnly={isStudent}
                                 placeholder={t('lessons_included')}
                                 className="flex-1 bg-transparent border-none focus:ring-0 font-medium dark:text-white"
                             />
                         </div>
 
                         <button
-                            onClick={() => setIsConsecutive(!isConsecutive)}
+                            onClick={() => !isStudent && setIsConsecutive(!isConsecutive)}
                             className="w-full flex items-center justify-between px-4 py-3 text-left"
                         >
                             <div className="flex items-center gap-3">
@@ -183,6 +195,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                                     type="number"
                                     value={durationDays}
                                     onChange={(e) => setDurationDays(e.target.value)}
+                                    readOnly={isStudent}
                                     placeholder={t('duration_days') || 'Duration (days)'}
                                     className="flex-1 bg-transparent border-none focus:ring-0 font-medium dark:text-white"
                                 />
@@ -199,7 +212,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                             {groups.map((group) => (
                                 <button
                                     key={group.id}
-                                    onClick={() => toggleGroup(String(group.id))}
+                                    onClick={() => !isStudent && toggleGroup(String(group.id))}
                                     className="w-full flex items-center justify-between px-4 py-3 text-left"
                                 >
                                     <div className="flex items-center gap-3">
@@ -223,7 +236,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                     </div>
 
                     {/* Delete Section */}
-                    {pass && (
+                    {pass && !isStudent && (
                         <button
                             onClick={handleDelete}
                             className={cn(

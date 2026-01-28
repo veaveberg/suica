@@ -11,14 +11,45 @@ export const get = query({
             return await ctx.db.query("pass_groups").collect();
         }
 
+        const passGroups = [];
+        const seenIds = new Set<string>();
+
+        // 1. If teacher, get owned associations
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("pass_groups")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+            for (const pg of owned) {
+                if (!seenIds.has(pg._id)) {
+                    passGroups.push(pg);
+                    seenIds.add(pg._id);
+                }
+            }
         }
 
-        return [];
+        // 2. Find all student records for this user
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const studentRec of myStudentRecords) {
+            // Get all pass_groups from this teacher
+            const teacherPassGroups = await ctx.db
+                .query("pass_groups")
+                .withIndex("by_user", (q) => q.eq("userId", studentRec.userId))
+                .collect();
+
+            for (const pg of teacherPassGroups) {
+                if (!seenIds.has(pg._id)) {
+                    passGroups.push(pg);
+                    seenIds.add(pg._id);
+                }
+            }
+        }
+
+        return passGroups;
     },
 });
 

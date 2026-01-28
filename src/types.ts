@@ -5,15 +5,19 @@ export interface Group {
   default_duration_minutes: number; // Default lesson length (e.g., 60)
   status: 'active' | 'archived';
   last_class_date?: string;
+  userId?: string;
+  teacherName?: string;
 }
 
 export interface Student {
   id?: string;
   name: string;
   telegram_username?: string;
+  telegram_id?: string;
   instagram_username?: string;
   balance_notes?: string;
   notes?: string;
+  userId?: string;
 }
 
 export interface StudentGroup {
@@ -65,6 +69,7 @@ export interface Subscription {
   is_consecutive: boolean;
   duration_days?: number;
   status: 'active' | 'archived';
+  userId?: string;
 }
 
 export interface Payment {
@@ -86,6 +91,9 @@ export interface Lesson {
   students_count: number;
   total_amount: number;
   notes?: string;
+  info_for_students?: string;
+  userId?: string;
+  teacherName?: string;
 }
 
 export interface Pass {
@@ -93,8 +101,11 @@ export interface Pass {
   name: string;
   price: number;
   lessons_count: number;
-  is_consecutive: boolean;
   duration_days?: number;
+  userId?: string;
+  teacherName?: string;
+  teacherUsername?: string;
+  teacherInstagram?: string;
 }
 
 export interface PassGroup {

@@ -201,11 +201,19 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
     const me = useQuery(api.users.getMe, userData.convexUser?._id ? { userId: userData.convexUser._id as any } : "skip");
 
     useEffect(() => {
-        if (me?.name && me.name !== userData.firstName) {
-            console.log("[TelegramProvider] Syncing name from Convex:", me.name);
-            setUserData(prev => ({ ...prev, firstName: me.name }));
+        if (me) {
+            const updates: Partial<typeof userData> = {};
+            if (me.name && me.name !== userData.firstName) {
+                updates.firstName = me.name;
+            }
+            if (me.tokenIdentifier && !userData.userId) {
+                updates.userId = parseInt(me.tokenIdentifier);
+            }
+            if (Object.keys(updates).length > 0) {
+                setUserData(prev => ({ ...prev, ...updates }));
+            }
         }
-    }, [me, userData.firstName]);
+    }, [me, userData.firstName, userData.userId]);
 
     const applyThemeVariables = (params: TelegramWebApp['themeParams']) => {
         const root = document.documentElement;
