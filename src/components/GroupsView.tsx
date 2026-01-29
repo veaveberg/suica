@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 import { createGroup } from '../db-server';
-import { Plus, ChevronDown, ChevronRight, Archive } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Archive, Instagram } from 'lucide-react';
+import { TelegramIcon } from './Icons';
 import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
 import { GroupDetailSheet } from './GroupDetailSheet';
@@ -28,14 +29,53 @@ export const GroupsView: React.FC = () => {
     };
     const [newGroupName, setNewGroupName] = useState('');
 
-    const { groups, schedules, students, subscriptions, attendance, lessons, refreshGroups, refreshSchedules, refreshLessons } = useData();
+    const { groups, schedules, students, studentGroups, subscriptions, attendance, lessons, refreshGroups, refreshSchedules, refreshLessons } = useData();
 
-    const activeGroups = groups.filter(g => g.status === 'active');
+    // Calculate enrolled group IDs for everyone (including Teachers who are students)
+    const enrolledGroupIds = useMemo(() => {
+        if (!currentTgId) return null;
+        const myStudentIds = students
+            .filter(s => s.telegram_id === String(currentTgId))
+            .map(s => s.id);
+
+        const groupIds = new Set<string>();
+
+        // 1. Explicit enrollments
+        studentGroups
+            .filter(sg => myStudentIds.includes(String(sg.student_id)))
+            .forEach(sg => groupIds.add(String(sg.group_id)));
+
+        // 2. Implied enrollments via Subscriptions/Passes
+        subscriptions
+            .filter(sub => myStudentIds.includes(String(sub.user_id)))
+            .forEach(sub => groupIds.add(String(sub.group_id)));
+
+        return groupIds;
+    }, [currentTgId, students, studentGroups, subscriptions]);
+
+    const activeGroups = groups.filter(g => {
+        if (g.status !== 'active') return false;
+
+        // 1. I own the group -> Show it
+        if (g.userId === String(currentTgId)) return true;
+
+        // 2. I am enrolled in the group -> Show it
+        if (enrolledGroupIds && enrolledGroupIds.has(String(g.id))) return true;
+
+        // Otherwise hide it (e.g. groups from my teachers that I haven't joined yet)
+        return false;
+    });
+
+    // Split into "My Groups" and "Student Groups" (where I am a student)
+    const myGroups = activeGroups.filter(g => g.userId === String(currentTgId));
+    const studentGroupsList = activeGroups.filter(g => g.userId !== String(currentTgId));
+
     const archivedGroups = groups.filter(g => g.status === 'archived');
 
     const isOwner = selectedGroup?.userId === String(currentTgId);
     const shouldShowAudit = selectedGroup && !isAdmin && (isStudentGlobal || !isOwner);
 
+    // ... existing auditData ...
     const auditData = useMemo(() => {
         if (!shouldShowAudit || !selectedGroup || !currentTgId) return null;
 
@@ -58,6 +98,8 @@ export const GroupsView: React.FC = () => {
             studentSubscriptions: subscriptions.filter(s => String(s.user_id) === String(studentRec.id))
         };
     }, [shouldShowAudit, selectedGroup, currentTgId, students, subscriptions, attendance, lessons]);
+
+
 
     const getScheduleSummary = (group: Group) => {
         const groupSchedules = schedules.filter(s => String(s.group_id) === String(group.id) && s.is_active);
@@ -105,74 +147,173 @@ export const GroupsView: React.FC = () => {
         }
     };
 
+    // Helper has to be updated to rely on group owner, not global role
+    const getGroupBalance = (group: Group) => {
+        // If I own the group, no balance to show (unless I'm also a student in my own group? Unlikely/Edge case)
+        if (group.userId === String(currentTgId)) return null;
+
+        // I am likely a student in this group
+        const studentRec = students.find(s =>
+            s.telegram_id === String(currentTgId) &&
+            s.userId === group.userId
+        );
+
+        if (!studentRec) return null;
+
+        const { balance } = calculateStudentGroupBalanceWithAudit(
+            studentRec.id!,
+            group.id!,
+            subscriptions,
+            attendance,
+            lessons
+        );
+
+        return balance;
+    };
+
     return (
         <div className="p-4">
-            {/* Create New Group Button */}
-            {!isCreating && !isStudentGlobal && (
-                <button
-                    onClick={() => setIsCreating(true)}
-                    className="w-full flex items-center justify-center gap-2 p-4 mb-4 bg-ios-blue/10 text-ios-blue rounded-2xl font-semibold active:scale-[0.98] transition-transform"
-                >
-                    <Plus className="w-5 h-5" />
-                    {t('create_group') || 'Create Group'}
-                </button>
-            )}
-
-            {/* New Group Input */}
-            {isCreating && (
-                <div className="p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl mb-4">
-                    <input
-                        type="text"
-                        value={newGroupName}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                        placeholder={t('group_name')}
-                        className="w-full px-4 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white"
-                        autoFocus
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleCreateGroup();
-                            if (e.key === 'Escape') setIsCreating(false);
-                        }}
-                    />
-                    <div className="flex gap-2 mt-3">
-                        <button
-                            onClick={() => setIsCreating(false)}
-                            className="flex-1 py-2 px-4 rounded-xl bg-gray-200 dark:bg-zinc-700 dark:text-white"
-                        >
-                            {t('cancel')}
-                        </button>
-                        <button
-                            onClick={handleCreateGroup}
-                            className="flex-1 py-2 px-4 rounded-xl bg-ios-blue text-white font-semibold"
-                        >
-                            {t('create')}
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Active Groups */}
-            <div className="space-y-2">
-                {activeGroups.map(group => (
-                    <button
-                        key={group.id}
-                        onClick={() => setSelectedGroup(group)}
-                        className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
-                    >
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3 mb-1">
-                                <div
-                                    className="w-4 h-4 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: group.color }}
-                                />
-                                <h3 className="text-xl font-bold dark:text-white leading-none truncate">{group.name}</h3>
-                            </div>
-                            <p className="text-sm text-ios-gray pl-7 truncate">
-                                {isStudentGlobal ? group.teacherName : getScheduleSummary(group)}
-                            </p>
+            {/* Active Groups Section */}
+            <div className="space-y-8">
+                {/* 1. My Groups (Created by me) */}
+                {(myGroups.length > 0 || !isStudentGlobal) && (
+                    <div className="space-y-4">
+                        {/* Only show title if we have both types of groups, to distinguish */}
+                        {(studentGroupsList.length > 0) && (
+                            <h3 className="text-xl font-bold dark:text-white px-1">
+                                {t('my_groups') || 'My Groups'}
+                            </h3>
+                        )}
+
+                        {/* Wrapper for list of my groups */}
+                        <div className="space-y-2">
+                            {myGroups.map(group => (
+                                <button
+                                    key={group.id}
+                                    onClick={() => setSelectedGroup(group)}
+                                    className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
+                                >
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <div
+                                                className="w-4 h-4 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: group.color }}
+                                            />
+                                            <h3 className="text-xl font-bold dark:text-white leading-none truncate">{group.name}</h3>
+                                        </div>
+                                        <p className="text-sm text-ios-gray pl-7 truncate">
+                                            {getScheduleSummary(group)}
+                                        </p>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0 ml-2" />
+                                </button>
+                            ))}
                         </div>
-                        <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0 ml-2" />
-                    </button>
-                ))}
+                    </div>
+                )}
+
+                {/* 2. Student Groups (Categorized by Teacher) */}
+                {studentGroupsList.length > 0 && (() => {
+                    const teachersMap = new Map<string, Group[]>();
+
+                    studentGroupsList.forEach(g => {
+                        const teacherName = g.teacherName || "Teacher";
+                        if (!teachersMap.has(teacherName)) {
+                            teachersMap.set(teacherName, []);
+                        }
+                        teachersMap.get(teacherName)!.push(g);
+                    });
+
+                    return Array.from(teachersMap.entries()).map(([teacherName, groupList]) => {
+                        const firstGroup = groupList[0];
+                        const tgUsername = firstGroup.teacherUsername;
+                        const igUsername = firstGroup.teacherInstagram;
+
+                        let tgUrl = null;
+                        if (tgUsername) {
+                            tgUrl = `https://t.me/${tgUsername.replace('@', '')}`;
+                        }
+
+                        return (
+                            <div key={teacherName} className="space-y-4">
+                                <div className="flex items-center justify-between px-1">
+                                    <h3 className="text-xl font-bold dark:text-white">
+                                        {teacherName}
+                                    </h3>
+                                    <div className="flex gap-2">
+                                        {tgUrl && (
+                                            <a
+                                                href={tgUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007AFF]/10 text-ios-blue rounded-xl font-bold active:scale-95 transition-transform"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <TelegramIcon className="w-4 h-4" />
+                                                <span className="text-xs font-bold">
+                                                    {tgUsername ? `@${tgUsername.replace('@', '')}` : t('chat')}
+                                                </span>
+                                            </a>
+                                        )}
+                                        {igUsername && (
+                                            <a
+                                                href={`https://instagram.com/${igUsername.replace('@', '')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#E1306C]/10 text-[#E1306C] rounded-xl font-bold active:scale-95 transition-transform"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Instagram className="w-4 h-4" />
+                                                <span className="text-xs font-bold">
+                                                    @{igUsername.replace('@', '')}
+                                                </span>
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    {groupList.map(group => {
+                                        const balance = getGroupBalance(group);
+
+                                        return (
+                                            <button
+                                                key={group.id}
+                                                onClick={() => setSelectedGroup(group)}
+                                                className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
+                                            >
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-3 mb-1">
+                                                        <div
+                                                            className="w-4 h-4 rounded-full flex-shrink-0"
+                                                            style={{ backgroundColor: group.color }}
+                                                        />
+                                                        <h3 className="text-xl font-bold dark:text-white leading-none truncate">{group.name}</h3>
+                                                    </div>
+                                                    <p className="text-sm text-ios-gray pl-7 truncate">
+                                                        {group.teacherName}
+                                                    </p>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {balance !== null && (
+                                                        <div className={`text-sm font-bold px-2 py-1 rounded-lg ${balance > 0 ? 'bg-ios-green/10 text-ios-green' : 'bg-ios-red/10 text-ios-red'
+                                                            }`}>
+                                                            {balance > 0 ? `+${balance}` : balance}
+                                                        </div>
+                                                    )}
+                                                    <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0" />
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    });
+                })()}
 
                 {activeGroups.length === 0 && !isCreating && (
                     <div className="text-center py-12 text-ios-gray">

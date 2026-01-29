@@ -58,7 +58,9 @@ export const get = query({
                 .first();
             groupsWithTeacher.push({
                 ...g,
-                teacherName: owner?.name || "Teacher"
+                teacherName: owner?.name || "Teacher",
+                teacherUsername: owner?.username,
+                teacherInstagram: owner?.instagram_username
             });
         }
 

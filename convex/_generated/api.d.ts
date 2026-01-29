@@ -9,6 +9,7 @@
  */
 
 import type * as attendance from "../attendance.js";
+import type * as balance_logic from "../balance_logic.js";
 import type * as calendars from "../calendars.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
@@ -20,6 +21,7 @@ import type * as pass_groups from "../pass_groups.js";
 import type * as passes from "../passes.js";
 import type * as permissions from "../permissions.js";
 import type * as ping from "../ping.js";
+import type * as revenue from "../revenue.js";
 import type * as schedules from "../schedules.js";
 import type * as student_groups from "../student_groups.js";
 import type * as students from "../students.js";
@@ -35,6 +37,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
+  balance_logic: typeof balance_logic;
   calendars: typeof calendars;
   groups: typeof groups;
   http: typeof http;
@@ -46,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   passes: typeof passes;
   permissions: typeof permissions;
   ping: typeof ping;
+  revenue: typeof revenue;
   schedules: typeof schedules;
   student_groups: typeof student_groups;
   students: typeof students;

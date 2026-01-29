@@ -507,6 +507,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                             <Users className="w-4 h-4" />
                                             <span>{lesson.students_count || 0}/{getGroupMemberCount(lesson.group_id)}</span>
                                         </div>
+                                        {lesson.status === 'completed' && lesson.total_amount !== undefined && (
+                                            <div className="flex items-center gap-1 text-ios-gray ml-1">
+                                                <span>{Number.isInteger(lesson.total_amount) ? lesson.total_amount : lesson.total_amount.toFixed(2).replace('.', ',')} ₾</span>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}

@@ -9,7 +9,8 @@ export default defineSchema({
         instagram_username: v.optional(v.string()), // Teacher's IG profile handle (e.g. for button in student view)
         role: v.union(v.literal("admin"), v.literal("teacher"), v.literal("student")),
         studentId: v.optional(v.id("students")),
-    }).index("by_token", ["tokenIdentifier"]),
+    }).index("by_token", ["tokenIdentifier"])
+        .index("by_username", ["username"]),
 
     groups: defineTable({
         name: v.string(),
@@ -87,6 +88,7 @@ export default defineSchema({
         lesson_id: v.id("lessons"),
         student_id: v.id("students"),
         status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+        payment_amount: v.optional(v.number()),
         userId: v.string(),
     })
         .index("by_user", ["userId"])

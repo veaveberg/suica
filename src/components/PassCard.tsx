@@ -8,7 +8,7 @@ import { cn } from '../utils/cn';
 interface PassCardProps {
     pass: Pass;
     groupsList: Group[];
-    onClick: () => void;
+    onClick?: () => void;
     showChevron?: boolean;
     priceOverride?: number;
     hasDiscount?: boolean;
@@ -31,14 +31,15 @@ export const PassCard: React.FC<PassCardProps> = ({
     const { t, i18n } = useTranslation();
     const displayPrice = priceOverride !== undefined ? priceOverride : pass.price;
 
-    const CardComponent = showChevron ? 'button' : 'div';
+    const isInteractive = !!onClick;
+    const CardComponent = isInteractive ? 'button' : 'div';
 
     return (
         <CardComponent
-            onClick={showChevron ? onClick : undefined}
+            onClick={onClick}
             className={cn(
                 "w-full bg-ios-card dark:bg-zinc-900 p-4 rounded-2xl flex items-center justify-between shadow-sm transition-transform text-left border border-gray-100 dark:border-zinc-800",
-                showChevron ? "active:scale-[0.98]" : "cursor-text scale-100 select-text"
+                isInteractive ? "active:scale-[0.98] cursor-pointer" : "cursor-text scale-100 select-text"
             )}
         >
             <div className="flex items-center gap-4 min-w-0">

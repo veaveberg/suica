@@ -1,5 +1,7 @@
+
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
@@ -69,7 +71,7 @@ export const create = mutation({
     handler: async (ctx, args) => {
         const user = await ensureTeacher(ctx, args.userId);
 
-        return await ctx.db.insert("subscriptions", {
+        const subId = await ctx.db.insert("subscriptions", {
             user_id: args.user_id,
             group_id: args.group_id,
             tariff_id: args.tariff_id,
@@ -83,6 +85,14 @@ export const create = mutation({
             status: args.status,
             userId: user.tokenIdentifier,
         });
+
+        await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
+            studentId: args.user_id,
+            groupId: args.group_id,
+            teacherUserId: user.tokenIdentifier
+        });
+
+        return subId;
     },
 });
 
@@ -111,6 +121,12 @@ export const update = mutation({
         }
 
         await ctx.db.patch(args.id, args.updates);
+
+        await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
+            studentId: sub.user_id,
+            groupId: sub.group_id,
+            teacherUserId: user.tokenIdentifier
+        });
     },
 });
 
@@ -129,5 +145,11 @@ export const remove = mutation({
         }
 
         await ctx.db.delete(args.id);
+
+        await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
+            studentId: sub.user_id,
+            groupId: sub.group_id,
+            teacherUserId: user.tokenIdentifier
+        });
     },
 });

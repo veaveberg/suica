@@ -58,6 +58,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             name: '',
         });
 
+        // Implicitly assign ownership so it's editable immediately
+        if (currentTgId) {
+            newStudent.userId = String(currentTgId);
+        }
+
         // 2. Refresh and Open
         await refreshStudents();
         setSelectedStudent(newStudent);

@@ -1,3 +1,4 @@
+
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
@@ -181,6 +182,108 @@ export const bulkCreate = mutation({
                 students_count: lesson.students_count || 0,
                 total_amount: lesson.total_amount || 0
             });
+        }
+    }
+});
+
+// Generate More Lessons (Append)
+export const generateMore = mutation({
+    args: {
+        userId: v.id("users"),
+        groupId: v.id("groups"),
+        count: v.number(),
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const group = await ctx.db.get(args.groupId);
+        if (!group) return;
+
+        // Get schedules
+        const schedules = await ctx.db
+            .query("schedules")
+            .withIndex("by_user", q => q.eq("userId", user.tokenIdentifier))
+            .collect();
+
+        const groupSchedules = schedules.filter(s => s.group_id === group._id && s.is_active);
+        if (groupSchedules.length === 0) return;
+
+        // Find the last lesson date/time to start generating after
+        const lastLesson = await ctx.db
+            .query("lessons")
+            .withIndex("by_group_date", q => q.eq("group_id", group._id))
+            .order("desc")
+            .first();
+
+        let startDate = new Date();
+        // If we have a last lesson, start checking from the next minute after it finishes or starts
+        if (lastLesson) {
+            const lastDate = new Date(`${lastLesson.date}T${lastLesson.time}`);
+            // Safety: Ensure startDate is valid
+            if (!isNaN(lastDate.getTime())) {
+                startDate = lastDate;
+            }
+        }
+
+        // Ensure we don't start in the past if we have no lessons, but if we have lessons we want to consecutive
+        // Actually if we have no lessons, start now. If we have lessons, start from last lesson.
+
+        const REF_MONDAY = 1736121600000; // 2025-01-06 00:00 UTC
+        const MS_PER_DAY = 24 * 60 * 60 * 1000;
+        const MS_PER_WEEK = 7 * MS_PER_DAY;
+
+        const newLessons = [];
+        let d = 0; // Days offset from start date
+
+        // Sort schedules by time for consistent daily ordering
+        groupSchedules.sort((a, b) => a.time.localeCompare(b.time));
+
+        while (newLessons.length < args.count && d < 365) {
+            // Check date is startDate + d days
+            // Note: startDate might have a time component. We should normalize to day for looping?
+            // Better: 'currentDay' date object.
+
+            const currentDay = new Date(startDate.getTime());
+            currentDay.setDate(currentDay.getDate() + d);
+
+            const dateStr = currentDay.toISOString().split('T')[0];
+            const dayOfWeek = currentDay.getDay(); // 0-6
+
+            const dailySchedules = groupSchedules.filter(s => s.day_of_week === dayOfWeek);
+
+            for (const slot of dailySchedules) {
+                // Frequency check
+                if (slot.frequency_weeks && slot.frequency_weeks > 1) {
+                    const checkDateForFreq = new Date(dateStr);
+                    const diff = checkDateForFreq.getTime() - REF_MONDAY;
+                    const weeks = Math.floor(diff / MS_PER_WEEK);
+                    if ((weeks + (slot.week_offset || 0)) % slot.frequency_weeks !== 0) continue;
+                }
+
+                // Check if this slot is strictly after the startDate (lesson start time)
+                // If d=0, we need to be careful not to duplicate the last lesson if it's on the same day
+                const slotDateTime = new Date(`${dateStr}T${slot.time}`);
+
+                if (slotDateTime <= startDate) continue;
+
+                newLessons.push({
+                    group_id: group._id,
+                    userId: user.tokenIdentifier,
+                    date: dateStr,
+                    time: slot.time,
+                    duration_minutes: slot.duration_minutes || group.default_duration_minutes || 60,
+                    schedule_id: slot._id,
+                    status: "upcoming" as const,
+                    students_count: 0,
+                    total_amount: 0
+                });
+
+                if (newLessons.length >= args.count) break;
+            }
+            d++;
+        }
+
+        for (const l of newLessons) {
+            await ctx.db.insert("lessons", l);
         }
     }
 });

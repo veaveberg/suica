@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { Id, Doc } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
 
@@ -105,16 +106,31 @@ export const getGroupExportUrls = query({
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return [];
 
-        // For now, only Teachers own groups.
-        // Students see groups they are in (not implemented yet for individual export, but could be)
-        // Let's implement for teacher only for now as requested.
+        let groups: Doc<"groups">[] = [];
 
-        // TODO: Handle student view if needed.
+        if (user.role === "teacher") {
+            groups = await ctx.db
+                .query("groups")
+                .withIndex("by_user", q => q.eq("userId", user.tokenIdentifier))
+                .collect();
+        } else {
+            // Student
+            const myStudentRecords = await ctx.db
+                .query("students")
+                .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+                .collect();
 
-        const groups = await ctx.db
-            .query("groups")
-            .withIndex("by_user", q => q.eq("userId", user.tokenIdentifier))
-            .collect();
+            const groupIds = new Set<Id<"groups">>();
+            for (const s of myStudentRecords) {
+                const sgs = await ctx.db.query("student_groups").withIndex("by_student_group", q => q.eq("student_id", s._id)).collect();
+                sgs.forEach(sg => groupIds.add(sg.group_id));
+            }
+
+            for (const gid of groupIds) {
+                const g = await ctx.db.get(gid);
+                if (g) groups.push(g);
+            }
+        }
 
         return groups
             .filter(g => g.status === 'active')
@@ -126,4 +142,3 @@ export const getGroupExportUrls = query({
             }));
     }
 });
-

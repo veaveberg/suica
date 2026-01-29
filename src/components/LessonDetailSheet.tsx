@@ -7,6 +7,7 @@ import { useData } from '../DataProvider';
 import * as api from '../api';
 import { cancelLesson, uncancelLesson, deleteLesson } from '../db-server';
 import { formatDate, formatTimeRange } from '../utils/formatting';
+import type { Attendance } from '../types';
 
 interface LessonDetailSheetProps {
     lesson: Lesson | null;
@@ -15,7 +16,7 @@ interface LessonDetailSheetProps {
 
 export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, onClose }) => {
     const { t, i18n } = useTranslation();
-    const { groups, students, studentGroups, refreshLessons, refreshAttendance } = useData();
+    const { groups, students, studentGroups, lessons, subscriptions, attendance: allAttendance, refreshLessons, refreshAttendance } = useData();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isAdmin = convexUser?.role === 'admin';
     const isOwner = lesson?.userId === String(currentTgId);

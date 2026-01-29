@@ -122,7 +122,7 @@ export const PassesView: React.FC = () => {
                                             href={tgUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-ios-blue/10 text-ios-blue rounded-xl font-bold active:scale-95 transition-transform"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#007AFF]/10 text-ios-blue rounded-xl font-bold active:scale-95 transition-transform"
                                         >
                                             <TelegramIcon className="w-4 h-4" />
                                             <span className="text-xs font-bold">
@@ -151,7 +151,6 @@ export const PassesView: React.FC = () => {
                                         key={pass.id}
                                         pass={pass}
                                         groupsList={getPassGroupsList(String(pass.id))}
-                                        onClick={() => { }}
                                         showChevron={false}
                                     />
                                 ))}

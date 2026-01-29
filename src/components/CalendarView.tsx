@@ -386,7 +386,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                               }
 
                               // Teacher view or fallback
-                              return `${lesson.students_count || 0}/${getGroupMemberCount(lesson.group_id)}`;
+                              const parts = [`${lesson.students_count || 0}/${getGroupMemberCount(lesson.group_id)}`];
+                              if (lesson.status === 'completed' && lesson.total_amount !== undefined) {
+                                // Format as currency, e.g. 150 ₾ (using integer if whole).
+                                // The user requested: "display the sum for teachers in lesson cards near the attendance counter. also in grey and only after lesson is marked ad completed"
+                                const amount = Number.isInteger(lesson.total_amount)
+                                  ? lesson.total_amount
+                                  : lesson.total_amount.toFixed(2).replace('.', ',');
+                                return (
+                                  <span className="flex items-center gap-1">
+                                    <span>{parts[0]}</span>
+                                    <span className="text-white/50 ml-1">{amount} ₾</span>
+                                  </span>
+                                );
+                              }
+                              return parts[0];
                             })()}
                           </div>
                         </button>

@@ -211,7 +211,6 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                                                     key={pu.passId}
                                                     pass={{ ...passTemplate, lessons_count: pu.lessonsTotal - pu.lessonsUsed }}
                                                     groupsList={[group]}
-                                                    onClick={() => { }}
                                                     showChevron={false}
                                                     totalLessons={pu.lessonsTotal}
                                                     startDate={pu.purchaseDate}

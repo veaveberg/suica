@@ -57,10 +57,24 @@ export const create = mutation({
     handler: async (ctx, args) => {
         const user = await ensureTeacher(ctx, args.userId);
 
+        let telegram_id = args.telegram_id;
+
+        // Try to link to existing user by username if telegram_id is not provided
+        if (!telegram_id && args.telegram_username) {
+            const existingUser = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", args.telegram_username))
+                .first();
+
+            if (existingUser) {
+                telegram_id = existingUser.tokenIdentifier;
+            }
+        }
+
         return await ctx.db.insert("students", {
             name: args.name,
             telegram_username: args.telegram_username,
-            telegram_id: args.telegram_id,
+            telegram_id: telegram_id,
             instagram_username: args.instagram_username,
             notes: args.notes,
             userId: user.tokenIdentifier,
@@ -90,7 +104,21 @@ export const update = mutation({
             throw new Error("Unauthorized");
         }
 
-        await ctx.db.patch(args.id, args.updates);
+        const patch: any = { ...args.updates };
+
+        // If username is being updated, try to link to existing user
+        if (args.updates.telegram_username) {
+            const existingUser = await ctx.db
+                .query("users")
+                .withIndex("by_username", (q) => q.eq("username", args.updates.telegram_username))
+                .first();
+
+            if (existingUser) {
+                patch.telegram_id = existingUser.tokenIdentifier;
+            }
+        }
+
+        await ctx.db.patch(args.id, patch);
     },
 });
 

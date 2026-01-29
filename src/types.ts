@@ -7,6 +7,8 @@ export interface Group {
   last_class_date?: string;
   userId?: string;
   teacherName?: string;
+  teacherUsername?: string;
+  teacherInstagram?: string;
 }
 
 export interface Student {

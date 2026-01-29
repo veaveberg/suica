@@ -191,11 +191,13 @@ export async function syncLessonsFromSchedule(targetGroupId?: string): Promise<v
     });
 }
 
-export async function generateFutureLessons(groupId: string, _count: number = 4): Promise<void> {
-    // Re-use sync logic but specific for this group
-    // The current syncLessonsFromSchedule generates 8 weeks.
-    // We can just call it.
-    await syncLessonsFromSchedule(groupId);
+export async function generateFutureLessons(groupId: string, count: number = 4): Promise<void> {
+    const userId = getAuthUserId();
+    await convex.mutation(api.lessons.generateMore, {
+        userId: userId as Id<"users">,
+        groupId: groupId as Id<"groups">,
+        count: count
+    });
 }
 
 export async function cancelLesson(lessonId: string): Promise<void> {

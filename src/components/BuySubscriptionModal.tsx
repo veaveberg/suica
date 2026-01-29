@@ -144,7 +144,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
                         <PassCard
                             key={pass.id}
                             pass={pass}
-                            groupsList={[]} // Passing empty groups list because we are in a group-filtered context
+                            groupsList={groups.filter(g => String(g.id) === String(selectedGroupId))}
                             onClick={() => handleBuy(pass)}
                             showChevron={false}
                             priceOverride={getPrice(pass)}

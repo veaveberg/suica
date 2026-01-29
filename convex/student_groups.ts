@@ -11,22 +11,43 @@ export const get = query({
             return await ctx.db.query("student_groups").collect();
         }
 
+        const studentGroups = [];
+        const seenIds = new Set<string>();
+
         if (user.role === "teacher") {
-            return await ctx.db
+            const owned = await ctx.db
                 .query("student_groups")
                 .withIndex("by_user", (q) => q.eq("userId", user.tokenIdentifier))
                 .collect();
+
+            for (const sg of owned) {
+                studentGroups.push(sg);
+                seenIds.add(sg._id);
+            }
         }
 
-        // Students might see their groups
-        if (user.role === "student" && user.studentId) {
-            return await ctx.db
+        // Also fetch groups where this user (teacher or student) is enrolled
+        // Find their student record(s) first
+        const myStudentRecords = await ctx.db
+            .query("students")
+            .withIndex("by_telegram_id", (q) => q.eq("telegram_id", user.tokenIdentifier))
+            .collect();
+
+        for (const s of myStudentRecords) {
+            const enrolled = await ctx.db
                 .query("student_groups")
-                .withIndex("by_student_group", (q) => q.eq("student_id", user.studentId!))
+                .withIndex("by_student_group", (q) => q.eq("student_id", s._id))
                 .collect();
+
+            for (const sg of enrolled) {
+                if (!seenIds.has(sg._id)) {
+                    studentGroups.push(sg);
+                    seenIds.add(sg._id);
+                }
+            }
         }
 
-        return [];
+        return studentGroups;
     },
 });
 
