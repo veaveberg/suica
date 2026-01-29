@@ -1,5 +1,5 @@
 
-import { Doc } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 
 export interface StudentBalance {
     balance: number;

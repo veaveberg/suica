@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
-import { Id, Doc } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
 

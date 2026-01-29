@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 import { createGroup } from '../db-server';
-import { Plus, ChevronDown, ChevronRight, Archive, Instagram } from 'lucide-react';
+import { ChevronDown, ChevronRight, Archive, Instagram } from 'lucide-react';
 import { TelegramIcon } from './Icons';
 import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
@@ -132,20 +132,7 @@ export const GroupsView: React.FC = () => {
             .join(', ');
     };
 
-    const handleCreateGroup = async () => {
-        if (!newGroupName.trim()) return;
 
-        try {
-            await createGroup(newGroupName.trim());
-            setNewGroupName('');
-            setIsCreating(false);
-            await refreshGroups();
-            await refreshSchedules();
-            await refreshLessons();
-        } catch (error) {
-            alert(error instanceof Error ? error.message : 'Failed to create group');
-        }
-    };
 
     // Helper has to be updated to rely on group owner, not global role
     const getGroupBalance = (group: Group) => {
