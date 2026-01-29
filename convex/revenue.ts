@@ -8,6 +8,7 @@ export const updateStudentRevenue = internalMutation({
         studentId: v.id("students"),
         groupId: v.id("groups"),
         teacherUserId: v.string(),
+        triggerLessonId: v.optional(v.id("lessons")),
     },
     handler: async (ctx, args) => {
         // Fetch inputs required for audit
@@ -58,30 +59,49 @@ export const updateStudentRevenue = internalMutation({
             if (!record) continue;
 
             let cost = 0;
-            if (entry.status === 'counted' && entry.coveredByPassId) {
-                const pass = studentSubscriptions.find(s => s._id === entry.coveredByPassId);
-                if (pass && pass.lessons_total > 0) {
-                    cost = pass.price / pass.lessons_total;
+            let isUncovered = false;
+
+            if (entry.status === 'counted') {
+                if (entry.coveredByPassId) {
+                    const pass = studentSubscriptions.find(s => s._id === entry.coveredByPassId);
+                    if (pass && pass.lessons_total > 0) {
+                        cost = pass.price / pass.lessons_total;
+                    }
+                } else {
+                    isUncovered = true;
                 }
             }
 
             // Only update if changed
-            if (record.payment_amount !== cost) {
-                await ctx.db.patch(record._id, { payment_amount: cost });
+            if (record.payment_amount !== cost || record.is_uncovered !== isUncovered) {
+                await ctx.db.patch(record._id, {
+                    payment_amount: cost,
+                    is_uncovered: isUncovered
+                });
                 touchedLessonIds.add(entry.lessonId);
             }
+        }
+
+        // If a specific lesson triggered this, ensure it's in the list even if no local changes were made
+        // (This happens when attendance for this student was deleted)
+        if (args.triggerLessonId) {
+            touchedLessonIds.add(args.triggerLessonId);
         }
 
         // Recalculate totals for touched lessons
         for (const lessonId of touchedLessonIds) {
             const lessonAttendance = await ctx.db
                 .query("attendance")
-                .withIndex("by_lesson_student", q => q.eq("lesson_id", lessonId as any)) // 'as any' for ID type safety
+                .withIndex("by_lesson_student", q => q.eq("lesson_id", lessonId as any))
                 .collect();
 
             const totalAmount = lessonAttendance.reduce((sum, a) => sum + (a.payment_amount || 0), 0);
+            const uncoveredCount = lessonAttendance.filter(a => a.is_uncovered).length;
 
-            await ctx.db.patch(lessonId as any, { total_amount: totalAmount });
+            await ctx.db.patch(lessonId as any, {
+                total_amount: totalAmount,
+                uncovered_count: uncoveredCount
+            });
         }
     }
 });

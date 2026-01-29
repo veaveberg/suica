@@ -56,6 +56,8 @@ export interface Attendance {
   lesson_id: string;
   student_id: string;
   status: AttendanceStatus;
+  payment_amount?: number;
+  is_uncovered?: boolean;
 }
 
 export interface Subscription {
@@ -92,6 +94,7 @@ export interface Lesson {
   schedule_id?: string;             // null = one-off lesson
   students_count: number;
   total_amount: number;
+  uncovered_count?: number;
   notes?: string;
   info_for_students?: string;
   userId?: string;

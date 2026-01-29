@@ -9,11 +9,13 @@ import { GroupsView } from './GroupsView'
 import { StudentsView } from './StudentsView'
 import { PassesView } from './PassesView'
 import { SettingsSheet } from './SettingsSheet'
+import { StudentCard } from './StudentCard'
 import { useData } from '../DataProvider'
 import { syncLessonsFromSchedule } from '../db'
+import * as api from '../api'
 import { cn } from '../utils/cn'
 import { useSearchParams } from '../hooks/useSearchParams'
-import type { Language } from '../types'
+import type { Language, Subscription } from '../types'
 
 export type TabId = 'classes' | 'groups' | 'students' | 'calendar' | 'passes'
 
@@ -59,7 +61,22 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         }
     }
 
-    const { students, lessons, subscriptions, refreshLessons } = useData()
+    // Sync Student Sheet
+    const studentIdParam = getParam('studentId')
+    const showStudent = !!studentIdParam
+    const setShowStudent = (show: boolean) => {
+        if (!show) {
+            setParam('studentId', null)
+        }
+    }
+
+    const { students, lessons, subscriptions, refreshLessons, refreshSubscriptions } = useData()
+    const selectedStudent = students.find(s => String(s.id) === studentIdParam) || null
+
+    const handleBuySubscription = async (newSub: Omit<Subscription, 'id'>) => {
+        await api.create<Subscription>('subscriptions', newSub);
+        await refreshSubscriptions();
+    };
     const [isSelectionMode, setIsSelectionMode] = useState(false)
     const [calendarYearDisplay, setCalendarYearDisplay] = useState('')
     const [externalCalendarsRefresh, setExternalCalendarsRefresh] = useState(0)
@@ -192,6 +209,16 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                 onChangeThemeMode={onChangeThemeMode}
                 onChangeLanguage={onChangeLanguage}
                 onCalendarsChange={() => setExternalCalendarsRefresh(prev => prev + 1)}
+            />
+
+            {/* Global Student Card */}
+            <StudentCard
+                isOpen={showStudent}
+                student={selectedStudent}
+                subscriptions={subscriptions}
+                onClose={() => setShowStudent(false)}
+                onBuySubscription={handleBuySubscription}
+                readOnly={isStudentGlobal || (!!selectedStudent && !!convexUser?.tokenIdentifier && selectedStudent.userId !== convexUser.tokenIdentifier && convexUser.role !== 'admin')}
             />
         </div>
     )

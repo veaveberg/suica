@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, Ban, Users, Circle, Trash2, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { CheckCircle2, Ban, Users, Circle, Trash2, ArrowUp, ArrowDown, Loader2, AlertTriangle } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student } from '../types';
 import { LessonDetailSheet } from './LessonDetailSheet';
@@ -26,7 +26,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     const { t, i18n } = useTranslation();
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [pastLessonsCount, setPastLessonsCount] = useState(BATCH_SIZE);
-    const { lessons: dataLessons, groups, studentGroups, students, refreshLessons, externalCalendars, attendance } = useData();
+    const { lessons: dataLessons, groups, students, refreshLessons, externalCalendars, attendance } = useData();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
 
@@ -111,16 +111,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
         return group?.color || '#007AFF';
     };
 
-    const getGroupMemberCount = (groupId: string) => {
-        const memberIds = studentGroups
-            .filter(sg => String(sg.group_id) === String(groupId))
-            .map(sg => String(sg.student_id));
-
-        return students.filter(s =>
-            memberIds.includes(String(s.id)) &&
-            s.name && s.name.trim().length > 0
-        ).length;
-    };
 
     // Format time like "14" or "14:30"
     const formatT = (timeStr: string) => {
@@ -471,7 +461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                             {(isStudent || !isOwner) ? t('not_marked') : t('needs_marking')}
                                         </span>
                                     ) : (
-                                        <span className="text-ios-orange text-sm font-medium">
+                                        <span className="text-ios-gray text-sm font-medium">
                                             {t('upcoming')}
                                         </span>
                                     )}
@@ -502,12 +492,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                 if (isStudentInContext) return null;
 
                                 return (
-                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                    <div className="flex items-center gap-2 flex-shrink-0">
                                         <div className="flex items-center gap-1">
                                             <Users className="w-4 h-4" />
-                                            <span>{lesson.students_count || 0}/{getGroupMemberCount(lesson.group_id)}</span>
+                                            <span>{lesson.students_count || 0}</span>
                                         </div>
-                                        {lesson.status === 'completed' && lesson.total_amount !== undefined && (
+                                        {lesson.uncovered_count !== undefined && lesson.uncovered_count > 0 && (
+                                            <div className="flex items-center gap-1 text-ios-orange">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                <span>{lesson.uncovered_count}</span>
+                                            </div>
+                                        )}
+                                        {lesson.total_amount !== undefined && lesson.total_amount > 0 && (
                                             <div className="flex items-center gap-1 text-ios-gray ml-1">
                                                 <span>{Number.isInteger(lesson.total_amount) ? lesson.total_amount : lesson.total_amount.toFixed(2).replace('.', ',')} ₾</span>
                                             </div>

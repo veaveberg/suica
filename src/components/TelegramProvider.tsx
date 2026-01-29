@@ -12,7 +12,7 @@ interface TelegramContextValue {
     username?: string;
     firstName?: string;
     lastName?: string;
-    convexUser?: { _id: string; role: string };
+    convexUser?: { _id: string; role: string; tokenIdentifier?: string };
     loginStandalone: () => Promise<void>;
     onAuth: (user: any) => Promise<void>;
     logout: () => void;
@@ -82,7 +82,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         username?: string;
         firstName?: string;
         lastName?: string;
-        convexUser?: { _id: string, role: string };
+        convexUser?: { _id: string, role: string, tokenIdentifier?: string };
     }>({});
 
     const login = useMutation(api.users.login);
@@ -102,7 +102,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                     firstName: tgUser.first_name,
                     lastName: tgUser.last_name,
                     username: tgUser.username,
-                    convexUser: { _id: user._id, role: user.role }
+                    convexUser: { _id: user._id, role: user.role, tokenIdentifier: user.tokenIdentifier }
                 });
                 console.log("[TelegramAuth] User state updated successfully");
             }
@@ -177,7 +177,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                             username: tgWebApp.initDataUnsafe.user.username,
                             firstName: tgWebApp.initDataUnsafe.user.first_name,
                             lastName: tgWebApp.initDataUnsafe.user.last_name,
-                            convexUser: { _id: user._id, role: user.role }
+                            convexUser: { _id: user._id, role: user.role, tokenIdentifier: user.tokenIdentifier }
                         });
                     }
                 }

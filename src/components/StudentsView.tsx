@@ -5,8 +5,8 @@ import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import * as api from '../api';
 import type { Student, Subscription } from '../types';
-import { StudentCard } from './StudentCard';
 import { calculateStudentGroupBalance } from '../utils/balance';
+import { useSearchParams } from '../hooks/useSearchParams';
 
 interface StudentsViewProps {
     students: Student[];
@@ -19,13 +19,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 }) => {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
-    const [isCardOpen, setIsCardOpen] = useState(false);
-    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const { setParam } = useSearchParams();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
-    const isAdmin = convexUser?.role === 'admin';
 
-    const { groups, studentGroups, refreshStudents, refreshSubscriptions, attendance, lessons } = useData();
+    const { groups, studentGroups, refreshStudents, attendance, lessons } = useData();
     const activeGroups = groups.filter(g => g.status === 'active');
 
     // Filter out completely empty ghost students and apply search
@@ -47,10 +45,6 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
         return activeGroups.filter(g => groupIds.map(String).includes(String(g.id)));
     };
 
-    const handleBuySubscription = async (newSub: Omit<Subscription, 'id'>) => {
-        await api.create<Subscription>('subscriptions', newSub);
-        await refreshSubscriptions();
-    };
 
     const openCreateMode = async () => {
         // 1. Create a blank student
@@ -65,13 +59,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
         // 2. Refresh and Open
         await refreshStudents();
-        setSelectedStudent(newStudent);
-        setIsCardOpen(true);
+        setParam('studentId', String(newStudent.id));
     };
 
     const openEditMode = (student: Student) => {
-        setSelectedStudent(student);
-        setIsCardOpen(true);
+        setParam('studentId', String(student.id));
     };
 
     return (
@@ -185,14 +177,6 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 )}
             </div>
 
-            <StudentCard
-                isOpen={isCardOpen}
-                student={selectedStudent}
-                subscriptions={subscriptions}
-                onClose={() => setIsCardOpen(false)}
-                onBuySubscription={handleBuySubscription}
-                readOnly={!isAdmin && (isStudent || (!!selectedStudent && !!currentTgId && selectedStudent.userId !== String(currentTgId)))}
-            />
         </div>
     );
 };

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
-import { createGroup } from '../db-server';
+
 import { ChevronDown, ChevronRight, Archive, Instagram } from 'lucide-react';
 import { TelegramIcon } from './Icons';
 import { useTelegram } from './TelegramProvider';
@@ -15,7 +15,7 @@ import { useSearchParams } from '../hooks/useSearchParams';
 
 export const GroupsView: React.FC = () => {
     const { t, i18n } = useTranslation();
-    const { getParam, setParam } = useSearchParams();
+    const { getParam } = useSearchParams();
     const [showArchived, setShowArchived] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const { convexUser, userId: currentTgId } = useTelegram();
@@ -23,13 +23,8 @@ export const GroupsView: React.FC = () => {
     const isAdmin = convexUser?.role === 'admin';
 
     const isCreating = getParam('sheet') === 'create_group';
-    const setIsCreating = (val: boolean) => {
-        if (val) setParam('sheet', 'create_group');
-        else setParam('sheet', null);
-    };
-    const [newGroupName, setNewGroupName] = useState('');
 
-    const { groups, schedules, students, studentGroups, subscriptions, attendance, lessons, refreshGroups, refreshSchedules, refreshLessons } = useData();
+    const { groups, schedules, students, studentGroups, subscriptions, attendance, lessons } = useData();
 
     // Calculate enrolled group IDs for everyone (including Teachers who are students)
     const enrolledGroupIds = useMemo(() => {

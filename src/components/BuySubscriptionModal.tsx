@@ -90,7 +90,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
             <div className="w-full max-w-sm bg-ios-card rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200 dark:bg-zinc-900 border border-transparent dark:border-zinc-800 flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center mb-6 shrink-0">
                     <div>

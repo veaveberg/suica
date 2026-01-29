@@ -117,7 +117,7 @@ export function calculateStudentGroupBalanceWithAudit(
             }
 
             // Spending status with no pass = debt
-            if (spendingStatuses.includes(attendanceRecord.status)) {
+            if (attendanceRecord.status === 'present') {
                 lessonsOwed++;
                 uncoveredLessons.push({
                     lessonId: lesson._id,
@@ -131,6 +131,15 @@ export function calculateStudentGroupBalanceWithAudit(
                     attendanceStatus: attendanceRecord.status,
                     status: 'counted',
                     reason: 'uncovered_no_matching_pass'
+                });
+            } else if (attendanceRecord.status === 'absence_invalid') {
+                auditEntries.push({
+                    lessonId: lesson._id,
+                    lessonDate: lesson.date,
+                    lessonTime: lesson.time,
+                    attendanceStatus: attendanceRecord.status,
+                    status: 'not_counted',
+                    reason: 'not_counted_no_attendance'
                 });
             }
         }
@@ -235,7 +244,7 @@ export function calculateStudentGroupBalanceWithAudit(
 
             // Allocation logic for uncovered lessons
             if (!covered) {
-                const shouldCountAsDebt = isPresent || dateMatchesConsecutivePass || (!candidatePassId && isInvalidSkip);
+                const shouldCountAsDebt = isPresent || dateMatchesConsecutivePass;
 
                 if (shouldCountAsDebt) {
                     auditEntries.push({

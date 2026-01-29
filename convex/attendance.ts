@@ -80,7 +80,8 @@ export const mark = mutation({
             await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
                 studentId: args.student_id,
                 groupId: lesson.group_id,
-                teacherUserId: user.tokenIdentifier
+                teacherUserId: user.tokenIdentifier,
+                triggerLessonId: args.lesson_id
             });
         }
     },
@@ -108,12 +109,86 @@ export const remove = mutation({
             await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
                 studentId: record.student_id,
                 groupId: lesson.group_id,
-                teacherUserId: user.tokenIdentifier
+                teacherUserId: user.tokenIdentifier,
+                triggerLessonId: record.lesson_id
             });
         }
     },
 });
 
+export const syncLessonAttendance = mutation({
+    args: {
+        userId: v.id("users"),
+        lesson_id: v.id("lessons"),
+        attendance: v.array(v.object({
+            student_id: v.id("students"),
+            status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+            payment_amount: v.optional(v.number()),
+        }))
+    },
+    handler: async (ctx, args) => {
+        const user = await ensureTeacher(ctx, args.userId);
+        const lesson = await ctx.db.get(args.lesson_id);
+        if (!lesson) throw new Error("Lesson not found");
+
+        const existingAttendance = await ctx.db
+            .query("attendance")
+            .withIndex("by_lesson_student", q => q.eq("lesson_id", args.lesson_id))
+            .collect();
+
+        const newAttendanceMap = new Map(args.attendance.map(a => [String(a.student_id), a]));
+        const existingAttendanceMap = new Map(existingAttendance.map(a => [String(a.student_id), a]));
+
+        const affectedStudents = new Set<string>();
+
+        // 1. Delete or Update existing
+        for (const existing of existingAttendance) {
+            const studentIdStr = String(existing.student_id);
+            const desired = newAttendanceMap.get(studentIdStr);
+
+            if (!desired) {
+                // Delete
+                await ctx.db.delete(existing._id);
+                affectedStudents.add(studentIdStr);
+            } else {
+                // Update if changed
+                if (existing.status !== desired.status || existing.payment_amount !== desired.payment_amount) {
+                    await ctx.db.patch(existing._id, {
+                        status: desired.status,
+                        payment_amount: desired.payment_amount
+                    });
+                    affectedStudents.add(studentIdStr);
+                }
+            }
+        }
+
+        // 2. Insert new
+        for (const desired of args.attendance) {
+            const studentIdStr = String(desired.student_id);
+            if (!existingAttendanceMap.has(studentIdStr)) {
+                await ctx.db.insert("attendance", {
+                    ...desired,
+                    lesson_id: args.lesson_id,
+                    userId: user.tokenIdentifier,
+                });
+                affectedStudents.add(studentIdStr);
+            }
+        }
+
+        // 3. Trigger revenue recalculations for students
+        for (const studentId of affectedStudents) {
+            await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
+                studentId: studentId as any,
+                groupId: lesson.group_id,
+                teacherUserId: user.tokenIdentifier,
+                triggerLessonId: args.lesson_id
+            });
+        }
+    }
+});
+
+export const syncLessonAttendanceOnly = syncLessonAttendance; // Alias if needed
+// Bulk Create for migration/generation
 export const bulkCreate = mutation({
     args: {
         userId: v.id("users"),
@@ -127,42 +202,10 @@ export const bulkCreate = mutation({
     handler: async (ctx, args) => {
         const user = await ensureTeacher(ctx, args.userId);
 
-        // Collect update targets (student/group pairs)
-        const updates = new Map<string, { studentId: any, groupId: any }>();
-
         for (const record of args.attendance) {
-            // Check if exists
-            const existing = await ctx.db
-                .query("attendance")
-                .withIndex("by_lesson_student", q => q.eq("lesson_id", record.lesson_id).eq("student_id", record.student_id))
-                .first();
-
-            if (existing) {
-                await ctx.db.patch(existing._id, {
-                    status: record.status,
-                    payment_amount: record.payment_amount
-                });
-            } else {
-                await ctx.db.insert("attendance", {
-                    ...record,
-                    userId: user.tokenIdentifier,
-                });
-            }
-
-            // Prepare update trigger
-            if (!updates.has(record.student_id)) {
-                const lesson = await ctx.db.get(record.lesson_id);
-                if (lesson) {
-                    updates.set(record.student_id, { studentId: record.student_id, groupId: lesson.group_id });
-                }
-            }
-        }
-
-        for (const update of updates.values()) {
-            await ctx.scheduler.runAfter(0, internal.revenue.updateStudentRevenue, {
-                studentId: update.studentId,
-                groupId: update.groupId,
-                teacherUserId: user.tokenIdentifier
+            await ctx.db.insert("attendance", {
+                ...record,
+                userId: user.tokenIdentifier,
             });
         }
     }

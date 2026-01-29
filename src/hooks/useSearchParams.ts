@@ -27,6 +27,8 @@ export const useSearchParams = () => {
 
         // Use pushState so back button works for navigation changes
         window.history.pushState({}, '', url.toString());
+        // Dispatch event to notify other hook instances
+        window.dispatchEvent(new PopStateEvent('popstate'));
         setSearchParams(url.searchParams);
     }, []);
 

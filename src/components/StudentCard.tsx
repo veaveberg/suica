@@ -142,7 +142,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
     return (
         <>
-            <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className={`fixed inset-0 z-[90] flex items-end sm:items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleCancel} />
 
                 <div className={`relative w-full max-lg max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl transition-transform duration-300 transform flex flex-col overflow-hidden overscroll-y-contain ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>

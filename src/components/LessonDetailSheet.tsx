@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ban, Calendar, Clock, Users, Trash2, XCircle, CheckCircle2, Check } from 'lucide-react';
+import { X, Ban, Calendar, Clock, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';
 import { cancelLesson, uncancelLesson, deleteLesson } from '../db-server';
 import { formatDate, formatTimeRange } from '../utils/formatting';
+import { useSearchParams } from '../hooks/useSearchParams';
+import { cn } from '../utils/cn';
+import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
+import type { Attendance } from '../types';
 
 interface LessonDetailSheetProps {
     lesson: Lesson | null;
@@ -15,7 +19,8 @@ interface LessonDetailSheetProps {
 
 export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, onClose }) => {
     const { t, i18n } = useTranslation();
-    const { groups, students, studentGroups, refreshLessons, refreshAttendance } = useData();
+    const { groups, students, studentGroups, refreshLessons, attendance: allAttendance, subscriptions, lessons } = useData();
+    const { setParam } = useSearchParams();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isAdmin = convexUser?.role === 'admin';
     const isOwner = lesson?.userId === String(currentTgId);
@@ -34,14 +39,73 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     // Get group info
     const group = lesson ? groups.find(g => String(g.id) === String(lesson.group_id)) : null;
 
-    // Get students in this group
-    const groupStudentIds = studentGroups
-        .filter(sg => lesson && String(sg.group_id) === String(lesson.group_id))
-        .map(sg => String(sg.student_id));
-    const groupStudents = students.filter(s =>
-        groupStudentIds.includes(String(s.id)) &&
-        s.name && s.name.trim().length > 0
-    );
+    // Memoize students in this group
+    const groupStudents = useMemo(() => {
+        const groupStudentIds = studentGroups
+            .filter(sg => lesson && String(sg.group_id) === String(lesson.group_id))
+            .map(sg => String(sg.student_id));
+        return students.filter(s =>
+            groupStudentIds.includes(String(s.id)) &&
+            s.name && s.name.trim().length > 0
+        );
+    }, [students, studentGroups, lesson?.group_id]);
+
+    // Memoize if a student has a pass specifically for THIS lesson
+    const studentStatusMap = useMemo(() => {
+        if (!lesson) return {};
+        const map: Record<string, {
+            hasActivePass: boolean;
+            isUncoveredPresent: boolean;
+            isUncoveredSkip: boolean;
+            presentPaymentAmount?: number;
+            skipPaymentAmount?: number;
+        }> = {};
+
+        groupStudents.forEach(s => {
+            // Virtual 'present' check
+            const resPresent = calculateStudentGroupBalanceWithAudit(
+                s.id!, lesson.group_id, subscriptions,
+                [...allAttendance, { student_id: s.id!, lesson_id: lesson.id!, status: 'present' } as Attendance],
+                lessons
+            );
+            const entryPresent = resPresent.auditEntries.find(e => String(e.lessonId) === String(lesson.id));
+
+            // Calculate cost for present if covered
+            let presentCost = 0;
+            if (entryPresent?.coveredByPassId) {
+                const pass = subscriptions.find(sub => String(sub.id) === String(entryPresent.coveredByPassId));
+                if (pass && pass.lessons_total > 0) {
+                    presentCost = pass.price / pass.lessons_total;
+                }
+            }
+
+            // Virtual 'absence_invalid' check
+            const resSkip = calculateStudentGroupBalanceWithAudit(
+                s.id!, lesson.group_id, subscriptions,
+                [...allAttendance, { student_id: s.id!, lesson_id: lesson.id!, status: 'absence_invalid' } as Attendance],
+                lessons
+            );
+            const entrySkip = resSkip.auditEntries.find(e => String(e.lessonId) === String(lesson.id));
+
+            // Calculate cost for skip if covered
+            let skipCost = 0;
+            if (entrySkip?.coveredByPassId) {
+                const pass = subscriptions.find(sub => String(sub.id) === String(entrySkip.coveredByPassId));
+                if (pass && pass.lessons_total > 0) {
+                    skipCost = pass.price / pass.lessons_total;
+                }
+            }
+
+            map[String(s.id)] = {
+                hasActivePass: !!(entryPresent && entryPresent.coveredByPassId),
+                isUncoveredPresent: !!(entryPresent && !entryPresent.coveredByPassId && entryPresent.status === 'counted'),
+                isUncoveredSkip: !!(entrySkip && !entrySkip.coveredByPassId && entrySkip.status === 'counted'),
+                presentPaymentAmount: presentCost > 0 ? presentCost : undefined,
+                skipPaymentAmount: skipCost > 0 ? skipCost : undefined,
+            };
+        });
+        return map;
+    }, [groupStudents, lesson, subscriptions, allAttendance, lessons]);
 
     // Load existing data
     useEffect(() => {
@@ -79,39 +143,39 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
 
     const handleSave = async () => {
         try {
-            // Sync attendance records with DB
-            // 1. Delete all for this lesson
-            const existing = await api.queryByField<{ id: string }>('attendance', 'lesson_id', lesson.id!);
-            for (const rec of existing) {
-                await api.remove('attendance', rec.id);
-            }
-
-            // 2. Create new records (only for non 'not_marked' statuses)
-            const recordsToCreate = Object.entries(attendanceData)
+            // 1. Prepare attendance data for sync
+            const attendance = Object.entries(attendanceData)
                 .filter(([_, status]) => status !== 'not_marked')
-                .map(([studentId, status]) => ({
-                    lesson_id: lesson.id!,
-                    student_id: studentId,
-                    status: status as AttendanceStatus
-                }));
+                .map(([studentId, status]) => {
+                    const info = studentStatusMap[studentId];
+                    const amount = status === 'present' ? info?.presentPaymentAmount :
+                        status === 'absence_invalid' ? info?.skipPaymentAmount : undefined;
 
-            if (recordsToCreate.length > 0) {
-                await api.bulkCreate('attendance', recordsToCreate);
-            }
+                    return {
+                        student_id: studentId as any,
+                        status: status as AttendanceStatus,
+                        payment_amount: amount
+                    };
+                });
 
-            // Update lesson status
-            await api.update('lessons', lesson.id!, {
-                status: isCompleted ? 'completed' : 'upcoming',
-                students_count: selected.length,
-                notes,
-                info_for_students: infoForStudents
-            });
-
-            await refreshLessons();
-            await refreshAttendance();
+            // 2. Close immediately for a felt-instant response
             onClose();
+
+            // 3. Sync attendance and update lesson in background
+            Promise.all([
+                api.syncAttendance(lesson.id!, attendance),
+                api.update('lessons', lesson.id!, {
+                    status: isCompleted ? 'completed' : 'upcoming',
+                    students_count: selected.length,
+                    notes,
+                    info_for_students: infoForStudents
+                })
+            ]).catch(error => {
+                console.error('Failed to save in background:', error);
+                alert(t('failed_to_save') || 'Failed to save changes. Please check your connection.');
+            });
         } catch (error) {
-            console.error('Failed to save:', error);
+            console.error('Failed to prepare save:', error);
         }
     };
 
@@ -296,7 +360,72 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                 key={student.id}
                                                 className="flex items-center justify-between gap-3 p-1.5 pl-4 rounded-2xl bg-ios-background dark:bg-zinc-800"
                                             >
-                                                <span className="font-medium dark:text-gray-200 truncate">{student.name}</span>
+                                                <div className="flex flex-col min-w-0 pr-2 py-0.5">
+                                                    <button
+                                                        onClick={() => setParam('studentId', String(student.id))}
+                                                        className="font-medium dark:text-gray-200 truncate hover:text-ios-blue transition-colors text-left"
+                                                    >
+                                                        {student.name}
+                                                    </button>
+                                                    <div className="flex flex-wrap items-start gap-2 mt-1">
+                                                        {(() => {
+                                                            const studentInfo = studentStatusMap[String(student.id)] || { hasActivePass: true, isUncoveredPresent: false, isUncoveredSkip: false };
+                                                            const localStatus = attendanceData[student.id!];
+                                                            const isMarked = localStatus && localStatus !== 'not_marked';
+
+                                                            if (!isMarked && !studentInfo.hasActivePass) {
+                                                                return (
+                                                                    <span className="text-[10px] text-ios-gray leading-[1.1] py-0.5 block">
+                                                                        {t('no_pass')}
+                                                                    </span>
+                                                                );
+                                                            }
+
+                                                            const record = allAttendance.find(a =>
+                                                                String(a.lesson_id) === String(lesson?.id) &&
+                                                                String(a.student_id) === String(student.id)
+                                                            );
+
+                                                            const showWarning = isMarked && (
+                                                                (localStatus === 'present' && studentInfo.isUncoveredPresent) ||
+                                                                (localStatus === 'absence_invalid' && studentInfo.isUncoveredSkip) ||
+                                                                (record?.is_uncovered)
+                                                            );
+
+                                                            if (!isMarked) return null;
+
+                                                            return (
+                                                                <div className="flex items-start gap-1.5 min-w-0">
+                                                                    {showWarning && (
+                                                                        <div className={cn(
+                                                                            "flex gap-1 bg-ios-orange/10 px-1.5 -ml-1.5 py-0.5 rounded-md min-w-0",
+                                                                            localStatus === 'present' ? "items-center" : "items-start"
+                                                                        )}>
+                                                                            <AlertTriangle className={cn("w-3 h-3 text-ios-orange flex-shrink-0", localStatus === 'present' ? "" : "mt-0.5")} />
+                                                                            <span className="text-[10px] text-ios-orange font-medium leading-[1.1]">
+                                                                                {localStatus === 'present' ? t('no_pass_short') : t('no_pass')}
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
+                                                                    {(() => {
+                                                                        const amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
+                                                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined)
+                                                                            || record?.payment_amount;
+
+                                                                        if (amount !== undefined && amount > 0) {
+                                                                            return (
+                                                                                <span className="text-[10px] font-bold text-ios-gray leading-none mt-1 flex-shrink-0">
+                                                                                    {Number.isInteger(amount) ? amount : amount.toFixed(2).replace('.', ',')} ₾
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                        return null;
+                                                                    })()}
+                                                                </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                </div>
 
                                                 {/* Attendance Controls */}
                                                 <div className="flex shrink-0">

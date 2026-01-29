@@ -66,6 +66,7 @@ export default defineSchema({
         schedule_id: v.optional(v.id("schedules")),
         students_count: v.number(),
         total_amount: v.number(),
+        uncovered_count: v.optional(v.number()),
         notes: v.optional(v.string()),
         info_for_students: v.optional(v.string()),
         userId: v.string(),
@@ -89,6 +90,7 @@ export default defineSchema({
         student_id: v.id("students"),
         status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
         payment_amount: v.optional(v.number()),
+        is_uncovered: v.optional(v.boolean()),
         userId: v.string(),
     })
         .index("by_user", ["userId"])

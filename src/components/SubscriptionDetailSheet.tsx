@@ -84,7 +84,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
     };
 
     return (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
             <div className="relative w-full max-w-lg bg-ios-background dark:bg-black rounded-t-3xl sm:rounded-3xl flex flex-col max-h-[90vh] overflow-hidden">

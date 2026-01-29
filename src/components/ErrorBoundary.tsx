@@ -33,7 +33,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         </div>
                         <h2 className="text-2xl font-bold dark:text-white">Something went wrong</h2>
                         <p className="text-ios-gray">
-                            We've encountered an unexpected error. Usually a quick refresh helps.
+                            We've encountered an unexpected error
                         </p>
                         <div className="p-4 bg-ios-background dark:bg-black rounded-xl text-xs font-mono text-left overflow-auto max-h-32 text-ios-red">
                             {this.state.error?.toString()}

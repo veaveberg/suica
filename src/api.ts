@@ -96,6 +96,15 @@ export async function bulkCreate<T>(table: TableName, items: any[]): Promise<T[]
     throw new Error("Bulk create not implemented for " + String(table));
 }
 
+export async function syncAttendance(lessonId: string, attendance: any[]): Promise<void> {
+    const userId = getAuthUserId();
+    await convex.mutation(api.attendance.syncLessonAttendance, {
+        userId: userId as Id<"users">,
+        lesson_id: lessonId as Id<"lessons">,
+        attendance
+    });
+}
+
 export async function clearTable(_table: TableName): Promise<void> {
     console.warn("clearTable not supported");
 }

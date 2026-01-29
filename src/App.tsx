@@ -74,10 +74,6 @@ function App() {
     );
   }
 
-  // if (convexUser?.role === 'student') {
-  //   return <StudentPortal />
-  // }
-
   return (
     <TeacherApp
       isDark={isDark}
