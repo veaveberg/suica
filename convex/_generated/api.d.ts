@@ -22,6 +22,7 @@ import type * as passes from "../passes.js";
 import type * as permissions from "../permissions.js";
 import type * as ping from "../ping.js";
 import type * as revenue from "../revenue.js";
+import type * as revenue_logic from "../revenue_logic.js";
 import type * as schedules from "../schedules.js";
 import type * as student_groups from "../student_groups.js";
 import type * as students from "../students.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   permissions: typeof permissions;
   ping: typeof ping;
   revenue: typeof revenue;
+  revenue_logic: typeof revenue_logic;
   schedules: typeof schedules;
   student_groups: typeof student_groups;
   students: typeof students;

@@ -201,7 +201,7 @@ export function calculateStudentGroupBalanceWithAudit(
         // Spending status - try to find a pass
         if (spendingStatuses.includes(attendanceRecord.status)) {
             const isPresent = attendanceRecord.status === 'present';
-            const isInvalidSkip = attendanceRecord.status === 'absence_invalid';
+            // const isInvalidSkip = attendanceRecord.status === 'absence_invalid';
 
             let covered = false;
             let candidatePassId: string | undefined = undefined;
@@ -217,9 +217,10 @@ export function calculateStudentGroupBalanceWithAudit(
                     if (pass.is_consecutive) dateMatchesConsecutivePass = true;
 
                     // IF it's an invalid skip, it ONLY consumes credits if the pass is consecutive
-                    if (isInvalidSkip && !pass.is_consecutive) {
-                        continue;
-                    }
+                    // User Request: "revenue should be added" -> consume credit even if non-consecutive
+                    // if (isInvalidSkip && !pass.is_consecutive) {
+                    //    continue;
+                    // }
 
                     const remaining = passCapacity.get(pass._id)! || 0;
                     if (remaining > 0) {

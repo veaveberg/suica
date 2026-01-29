@@ -5,6 +5,8 @@ import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';
+import { api as convexApi } from '../../convex/_generated/api';
+import { useQuery } from 'convex/react';
 import { cancelLesson, uncancelLesson, deleteLesson } from '../db-server';
 import { formatDate, formatTimeRange } from '../utils/formatting';
 import { useSearchParams } from '../hooks/useSearchParams';
@@ -106,6 +108,11 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
         });
         return map;
     }, [groupStudents, lesson, subscriptions, allAttendance, lessons]);
+
+    // Fetch revenue stats (Equation)
+    const revenueStats = useQuery(convexApi.revenue.getRevenueStatsForLesson,
+        lesson ? { lessonId: lesson.id as any, groupId: lesson.group_id as any } : "skip"
+    );
 
     // Load existing data
     useEffect(() => {
@@ -373,6 +380,9 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                             const localStatus = attendanceData[student.id!];
                                                             const isMarked = localStatus && localStatus !== 'not_marked';
 
+                                                            // Get revenue info from Query
+                                                            const revInfo = revenueStats?.[String(student.id)];
+
                                                             if (!isMarked && !studentInfo.hasActivePass) {
                                                                 return (
                                                                     <span className="text-[10px] text-ios-gray leading-[1.1] py-0.5 block">
@@ -392,7 +402,22 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                                 (record?.is_uncovered)
                                                             );
 
-                                                            if (!isMarked) return null;
+                                                            if (!isMarked) {
+                                                                // Show potential revenue if not marked (Only if has pass)
+                                                                if (revInfo) {
+                                                                    return (
+                                                                        <div className="flex items-center gap-2 py-0.5">
+                                                                            <span className="text-[10px] font-bold text-ios-gray/50 leading-none">
+                                                                                {revInfo.cost.toFixed(2).replace('.', ',')} ₾
+                                                                            </span>
+                                                                            <span className="text-[10px] font-normal text-ios-gray/50 leading-none">
+                                                                                {revInfo.equation}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }
 
                                                             return (
                                                                 <div className="flex items-start gap-1.5 min-w-0">
@@ -408,15 +433,30 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                                         </div>
                                                                     )}
                                                                     {(() => {
-                                                                        const amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
+                                                                        // Use revInfo if available for current synced calculation, fallback to local/record logic
+                                                                        let amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
                                                                             localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined)
                                                                             || record?.payment_amount;
 
+                                                                        // Override with revInfo if present and marked
+                                                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) { // Valid skip is 0 usually
+                                                                            // For valid skip, cost is 0?
+                                                                            // revenue_logic calculates 'unit cost'. if we mark as valid skip, we don't charge.
+                                                                            amount = revInfo.cost;
+                                                                        }
+
                                                                         if (amount !== undefined && amount > 0) {
                                                                             return (
-                                                                                <span className="text-[10px] font-bold text-ios-gray leading-none mt-1 flex-shrink-0">
-                                                                                    {Number.isInteger(amount) ? amount : amount.toFixed(2).replace('.', ',')} ₾
-                                                                                </span>
+                                                                                <div className="flex items-center gap-2 mt-1">
+                                                                                    <span className="text-[10px] font-bold text-ios-gray leading-none flex-shrink-0">
+                                                                                        {Number.isInteger(amount) ? amount : amount.toFixed(2).replace('.', ',')} ₾
+                                                                                    </span>
+                                                                                    {revInfo && studentInfo.hasActivePass && (
+                                                                                        <span className="text-[10px] font-normal text-ios-gray leading-none">
+                                                                                            {revInfo.equation}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
                                                                             );
                                                                         }
                                                                         return null;
