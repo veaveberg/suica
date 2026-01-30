@@ -2,12 +2,13 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format, addDays, subMonths, isToday, getDate } from 'date-fns';
 import { ru, ka, enUS } from 'date-fns/locale';
-import { ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Loader2, Users } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import type { Lesson } from '../types';
 import { cn } from '../utils/cn';
+import { formatCurrency } from '../utils/formatting';
 import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
 import type { ExternalEvent } from '../types';
 
@@ -19,7 +20,7 @@ interface CalendarViewProps {
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, externalEventsRefresh, isActive }) => {
   const { t, i18n } = useTranslation();
-  const { lessons, groups, studentGroups, students, externalCalendars, attendance } = useData();
+  const { lessons, groups, students, externalCalendars, attendance } = useData();
   const { convexUser, userId: currentTgId } = useTelegram();
   const isStudentGlobal = convexUser?.role === 'student';
   const isAdmin = convexUser?.role === 'admin';
@@ -74,16 +75,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
     return group?.color || '#007AFF';
   };
 
-  const getGroupMemberCount = (groupId: string) => {
-    const memberIds = studentGroups
-      .filter(sg => String(sg.group_id) === String(groupId))
-      .map(sg => String(sg.student_id));
-
-    return students.filter(s =>
-      memberIds.includes(String(s.id)) &&
-      s.name && s.name.trim().length > 0
-    ).length;
-  };
 
   // Deduplicate and group lessons by date
   const lessonsByDate = useMemo(() => {
@@ -385,22 +376,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                                 }
                               }
 
-                              // Teacher view or fallback
-                              const parts = [`${lesson.students_count || 0}/${getGroupMemberCount(lesson.group_id)}`];
-                              if (lesson.status === 'completed' && lesson.total_amount !== undefined) {
-                                // Format as currency, e.g. 150 ₾ (using integer if whole).
-                                // The user requested: "display the sum for teachers in lesson cards near the attendance counter. also in grey and only after lesson is marked ad completed"
-                                const amount = Number.isInteger(lesson.total_amount)
-                                  ? lesson.total_amount
-                                  : lesson.total_amount.toFixed(2).replace('.', ',');
-                                return (
-                                  <span className="flex items-center gap-1">
-                                    <span>{parts[0]}</span>
+                              const amount = lesson.status === 'completed' && lesson.total_amount !== undefined
+                                ? formatCurrency(lesson.total_amount)
+                                : null;
+
+                              return (
+                                <span className="flex items-center">
+                                  <Users className="w-[9px] h-[9px] -translate-y-[0.5px]" />
+                                  <span>{lesson.students_count || 0}</span>
+                                  {amount !== null && (
                                     <span className="text-white/50 ml-1">{amount} ₾</span>
-                                  </span>
-                                );
-                              }
-                              return parts[0];
+                                  )}
+                                </span>
+                              );
                             })()}
                           </div>
                         </button>

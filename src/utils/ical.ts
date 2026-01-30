@@ -82,7 +82,7 @@ function unescapeText(text: string): string {
         .replace(/\\\\/g, '\\');
 }
 
-export function parseICalFeed(icsContent: string, calendarName?: string, calendarColor?: string): ExternalEvent[] {
+export function parseICalFeed(icsContent: string, calendarName?: string, calendarColor?: string, calendarId?: string): ExternalEvent[] {
     const events: ExternalEvent[] = [];
     const lines = unfoldLines(icsContent);
 
@@ -109,7 +109,7 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
 
         if (line === 'BEGIN:VEVENT') {
             inEvent = true;
-            currentEvent = { calendarName, calendarColor };
+            currentEvent = { calendarName, calendarColor, calendarId };
             continue;
         }
 
@@ -127,6 +127,7 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
                     url: currentEvent.url,
                     calendarName: currentEvent.calendarName,
                     calendarColor: currentEvent.calendarColor,
+                    calendarId: currentEvent.calendarId,
                 });
             }
             currentEvent = {};
@@ -179,7 +180,8 @@ const CORS_PROXIES = [
 ];
 
 // Fetch and parse an iCal feed
-export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise<ExternalEvent[]> {
+// Returns null if all proxies fail
+export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise<ExternalEvent[] | null> {
     // Convert webcal:// to https:// (iCloud uses webcal://)
     let url = calendar.url.replace(/^webcal:\/\//i, 'https://');
 
@@ -210,7 +212,7 @@ export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise
                 continue;
             }
 
-            const events = parseICalFeed(icsContent, calendar.name, calendar.color);
+            const events = parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
             return events;
         } catch (error) {
             continue;
@@ -218,7 +220,7 @@ export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise
     }
 
     console.error(`ical: All proxies failed for ${calendar.name}`);
-    return [];
+    return null;
 }
 
 // Get events for a specific date from external events
@@ -344,15 +346,44 @@ export function cacheEvents(events: ExternalEvent[]): void {
 }
 
 // Fetch all enabled calendars and return combined events
-export async function fetchAllExternalEvents(calendars: ExternalCalendar[]): Promise<ExternalEvent[]> {
-    const enabledCalendars = calendars.filter(c => c.enabled);
-    const allEvents: ExternalEvent[] = [];
-
-    for (const calendar of enabledCalendars) {
-        const events = await fetchExternalCalendar(calendar);
-        allEvents.push(...events);
+export async function fetchAllExternalEvents(calendars: ExternalCalendar[] | null | undefined): Promise<ExternalEvent[]> {
+    if (!calendars || calendars.length === 0) {
+        // IMPORTANT: Do NOT call cacheEvents([]) here! 
+        // If we have no calendars yet (loading or user has none), just return empty array
+        // but keep the old cache intact in case it's just a temporary loading state.
+        return [];
     }
 
+    const enabledCalendars = calendars.filter(c => c.enabled);
+    if (enabledCalendars.length === 0) {
+        cacheEvents([]);
+        return [];
+    }
+
+    // Get currently cached events to use as fallback
+    const cachedEvents = getCachedEvents();
+
+    // Fetch all in parallel
+    const results = await Promise.all(enabledCalendars.map(async (calendar) => {
+        try {
+            const freshEvents = await fetchExternalCalendar(calendar);
+            if (freshEvents !== null) {
+                return freshEvents;
+            }
+        } catch (error) {
+            console.error(`ical: Error fetching ${calendar.name}:`, error);
+        }
+
+        // If fetch failed, return cached events for THIS calendar
+        // This prevents the whole calendar from disappearing intermittently.
+        return cachedEvents.filter(e => e.calendarId === calendar.id);
+    }));
+
+    const allEvents = results.flat();
+
+    // Only update cache if we actually have some data or all fetches explicitly returned empty lists (not failures)
+    // Actually, results.flat() will contain either fresh or cached data, so it's safe to cache.
     cacheEvents(allEvents);
+
     return allEvents;
 }

@@ -16,10 +16,9 @@ export function calculateRevenuePerLesson(
     attendance: Doc<"attendance">[]
 ): Map<string, LessonRevenueInfo> {
     const revenueMap = new Map<string, LessonRevenueInfo>();
+    const today = new Date().toISOString().split('T')[0];
 
     // 1. Filter and Sort Passes
-    // We only care about active passes for this group/student
-    // Note: 'archived' passes might still be relevant for historical lessons, so we include all.
     const passes = subscriptions
         .filter(s => s.user_id === studentId && s.group_id === groupId)
         .sort((a, b) => a.purchase_date.localeCompare(b.purchase_date));
@@ -29,46 +28,6 @@ export function calculateRevenuePerLesson(
         .filter(l => l.group_id === groupId)
         .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
-    // 3. Process Passes to define timelines
-    // For Consecutive passes, the timeline is [PurchaseDate, NextPassPurchaseDate OR ExpiryDate)
-    // For Non-Consecutive, it is [PurchaseDate, ExpiryDate) but usage is Credit-based.
-
-    // We need to map each lesson to a pass *first* to count the total lessons for consecutive passes.
-
-    // Strategy:
-    // A. Identify the "Effective Window" for each Consecutive pass.
-    // B. Count lessons in that window.
-    // C. Calculate cost.
-
-    const passEffectiveWindows = new Map<string, { start: string, end: string, pass: Doc<"subscriptions"> }>();
-
-    for (let i = 0; i < passes.length; i++) {
-        const pass = passes[i];
-        if (pass.is_consecutive) continue; // CONSECUTIVE uses fixed calc, so no window needed (or simple usage)
-
-
-        const start = pass.purchase_date;
-        let end = pass.expiry_date || "9999-12-31";
-
-        // Check for overlap with NEXT consecutive or ANY next pass?
-        // User said: "if later they get another pass... we then have to only count lessons from the start of the pass to getting a new pass"
-        // This usually implies the new pass replaces the old one.
-        // Assuming ANY new pass (of same group) acts as a cut-off.
-
-        if (i < passes.length - 1) {
-            const nextPass = passes[i + 1];
-            if (nextPass.purchase_date < end) {
-                end = nextPass.purchase_date;
-            }
-        }
-
-        passEffectiveWindows.set(pass._id, { start, end, pass });
-    }
-
-    // 4. Calculate Revenue
-    // For Consecutive: Divide Price by Lesson Count in Window.
-    // For Non-Consecutive: Divide Price by Total Lessons (Limit).
-
     // Build attendance map for fast lookup
     const attendanceMap = new Map<string, Doc<"attendance">>();
     for (const a of attendance) {
@@ -77,72 +36,103 @@ export function calculateRevenuePerLesson(
         }
     }
 
-    // Pre-calculate counts for passes (Attended vs Unattended in window)
-    const passUsageStats = new Map<string, { attended: number, unattended: number }>();
-
-    for (const lesson of sortedLessons) {
-        if (lesson.status === 'cancelled') continue; // Don't count cancelled
-
-        // Check which pass covers this (for stats)
-        for (const [passId, window] of passEffectiveWindows.entries()) {
-            if (lesson.date >= window.start && lesson.date < window.end) {
-                const stats = passUsageStats.get(passId) || { attended: 0, unattended: 0 };
-
-                // User Logic:
-                // Attended (Present) -> Fixed Rate.
-                // Unattended (Invalid Skip, Future, Unmarked) -> Dynamic Remainder.
-                // Valid Skip -> Extends pass (Ignored here to not dilute value?)
-
-                const attendanceRecord = attendanceMap.get(lesson._id);
-                // Status defaults to 'unmarked' if not found.
-                // But lesson might be 'future'.
-
-                const isAttended = attendanceRecord?.status === 'present';
-                const isValidSkip = attendanceRecord?.status === 'absence_valid';
-
-                if (!isValidSkip) {
-                    if (isAttended) {
-                        stats.attended++;
-                    } else {
-                        stats.unattended++;
-                    }
-                }
-                passUsageStats.set(passId, stats);
-            }
-        }
+    // Track state for pass usage during traversal
+    const passCapacity = new Map<string, number>();
+    for (const p of passes) {
+        passCapacity.set(p._id, p.lessons_total);
     }
 
-    // Now assign revenue
-    // We iterate lessons again to assign values
-    // We need to know if a lesson is ACTUALLY covered by a specific pass (logic from balance_logic might be needed?)
-    // Or do we implement standalone coverage logic here?
-    // "Either attendance is marked or not, we can show revenue".
-    // This implies we project coverage.
+    // Helper to check if pass is expired relative to TODAY
+    const isExpiredRelativeToday = (p: Doc<"subscriptions">) =>
+        p.status === 'archived' || (p.expiry_date && p.expiry_date < today);
 
-    // Let's iterate lessons and determine best-guess coverage.
+    // 3. Process Non-Consecutive Windows (already defined by date ranges)
+    const passEffectiveWindows = new Map<string, { start: string, end: string, pass: Doc<"subscriptions"> }>();
+    const nonConsecutivePasses = passes.filter(p => !p.is_consecutive);
+
+    for (let i = 0; i < nonConsecutivePasses.length; i++) {
+        const pass = nonConsecutivePasses[i];
+        const start = pass.purchase_date;
+        let end = pass.expiry_date || "9999-12-31";
+
+        if (i < nonConsecutivePasses.length - 1) {
+            const nextPass = nonConsecutivePasses[i + 1];
+            if (nextPass.purchase_date < end) {
+                end = nextPass.purchase_date;
+            }
+        }
+        passEffectiveWindows.set(pass._id, { start, end, pass });
+    }
+
+    // Pre-calculate usage stats for non-consecutive passes
+    const passUsageStats = new Map<string, { attended: number, unattended: number }>();
 
     for (const lesson of sortedLessons) {
         if (lesson.status === 'cancelled') continue;
 
-        // Find applicable pass
+        for (const [passId, window] of passEffectiveWindows.entries()) {
+            if (lesson.date >= window.start && lesson.date < window.end) {
+                // Check relative today expiration
+                if (isExpiredRelativeToday(window.pass) && lesson.date >= today) continue;
+
+                // Also check capacity if we want to be strict, but non-consecutive are window-based.
+                // However, they still have lessons_total!
+                const remaining = passCapacity.get(passId) || 0;
+                if (remaining <= 0) continue;
+
+                const stats = passUsageStats.get(passId) || { attended: 0, unattended: 0 };
+                const attendanceRecord = attendanceMap.get(lesson._id);
+                const isAttended = attendanceRecord?.status === 'present';
+                const isValidSkip = attendanceRecord?.status === 'absence_valid';
+
+                if (!isValidSkip) {
+                    if (isAttended) stats.attended++;
+                    else stats.unattended++;
+                    passCapacity.set(passId, remaining - 1);
+                }
+                passUsageStats.set(passId, stats);
+                break; // One pass per lesson
+            }
+        }
+    }
+
+    // Reset capacity for the main calculation loop (we will traverse again to assign revenue)
+    for (const p of passes) {
+        passCapacity.set(p._id, p.lessons_total);
+    }
+
+    // 4. Calculate Revenue
+    for (const lesson of sortedLessons) {
+        if (lesson.status === 'cancelled') continue;
+
         let coveredBy = null;
 
-        // 1. Check Non-Consecutive Windows first (Dynamic / Date Limited)
+        // A. Check Non-Consecutive Windows
         for (const [, window] of passEffectiveWindows.entries()) {
             if (lesson.date >= window.start && lesson.date < window.end) {
-                coveredBy = window.pass;
-                break;
+                if (isExpiredRelativeToday(window.pass) && lesson.date >= today) continue;
+
+                const remaining = passCapacity.get(window.pass._id) || 0;
+                if (remaining > 0) {
+                    coveredBy = window.pass;
+                    break;
+                }
             }
         }
 
-        // 2. If not covered by dynamic, check Consecutive (Fixed / Credit based)
+        // B. Check Consecutive
         if (!coveredBy) {
-            const fixedPasses = passes.filter(p => p.is_consecutive &&
+            const candidatePasses = passes.filter(p => p.is_consecutive &&
                 lesson.date >= p.purchase_date &&
-                (!p.expiry_date || lesson.date <= p.expiry_date));
+                (!p.expiry_date || lesson.date <= p.expiry_date) &&
+                (!isExpiredRelativeToday(p) || lesson.date < today));
 
-            if (fixedPasses.length > 0) {
-                coveredBy = fixedPasses[0];
+            for (const p of candidatePasses) {
+                const remaining = passCapacity.get(p._id) || 0;
+                if (remaining > 0) {
+                    coveredBy = p;
+                    break;
+                }
             }
         }
 
@@ -150,52 +140,47 @@ export function calculateRevenuePerLesson(
             let cost = 0;
             let equation = "";
 
-            if (!coveredBy.is_consecutive) {
-                // Non-Consecutive (Hybrid Logic)
-                const stats = passUsageStats.get(coveredBy._id) || { attended: 0, unattended: 1 };
+            const attendanceRecord = attendanceMap.get(lesson._id);
+            const isAttended = attendanceRecord?.status === 'present';
+            const isValidSkip = attendanceRecord?.status === 'absence_valid';
 
-                // 1. Fixed Rate for Attended
-                const fixedRate = coveredBy.price / (coveredBy.lessons_total || 1);
+            if (isValidSkip) {
+                cost = 0;
+                equation = "0 (Valid Skip)";
+                // Valid skip doesn't consume capacity in our logic
+            } else {
+                if (!coveredBy.is_consecutive) {
+                    // Non-Consecutive (Hybrid)
+                    const stats = passUsageStats.get(coveredBy._id) || { attended: 0, unattended: 1 };
+                    const fixedRate = coveredBy.price / (coveredBy.lessons_total || 1);
 
-                const attendanceRecord = attendanceMap.get(lesson._id);
-                const isAttended = attendanceRecord?.status === 'present';
-                const isValidSkip = attendanceRecord?.status === 'absence_valid';
-
-                if (isAttended) {
-                    cost = fixedRate;
-                    equation = `${coveredBy.price} / ${coveredBy.lessons_total}`;
-                } else {
-                    // 2. Dynamic Rate for Unattended (Remainder)
-                    const revenueUsed = stats.attended * fixedRate;
-                    const remainingRevenue = coveredBy.price - revenueUsed;
-                    // Distribute remainder among unattended lessons
-                    // If no unattended lessons (shouldn't happen if we are here and status != present), default to fixed?
-                    // Or if we are a valid skip?
-
-                    if (isValidSkip) {
-                        cost = 0;
-                        equation = "0 (Valid Skip)";
+                    if (isAttended) {
+                        cost = fixedRate;
+                        equation = `${coveredBy.price} / ${coveredBy.lessons_total}`;
                     } else {
+                        const revenueUsed = stats.attended * fixedRate;
+                        const remainingRevenue = Math.max(0, coveredBy.price - revenueUsed);
                         const count = stats.unattended || 1;
                         cost = remainingRevenue / count;
-                        // Format: "(Price - Used) / RemainingCount"
-                        // e.g. "(100 - 20) / 4"
                         equation = `(${coveredBy.price} - ${revenueUsed.toFixed(0)}) / ${count}`;
                     }
+                } else {
+                    // Consecutive
+                    const count = coveredBy.lessons_total || 1;
+                    cost = coveredBy.price / count;
+                    equation = `${coveredBy.price} / ${count}`;
                 }
-            } else {
-                // Consecutive (In a row): Fixed price per lesson (Limit)
-                // Note: Previous logic was Fixed. Stick to Fixed.
-                const count = coveredBy.lessons_total || 1;
-                cost = coveredBy.price / count;
-                equation = `${coveredBy.price} / ${count}`;
+
+                // Consume capacity
+                const remaining = passCapacity.get(coveredBy._id) || 0;
+                passCapacity.set(coveredBy._id, remaining - 1);
             }
 
             revenueMap.set(lesson._id, {
                 cost,
                 equation,
                 usedPassId: coveredBy._id,
-                isEstimated: lesson.date > new Date().toISOString() // Proxy for "future"
+                isEstimated: lesson.date > new Date().toISOString()
             });
         }
     }

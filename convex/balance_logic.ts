@@ -56,11 +56,11 @@ export function calculateStudentGroupBalanceWithAudit(
     const spendingStatuses = ['present', 'absence_invalid'];
     const auditEntries: BalanceAuditEntry[] = [];
 
+    const today = new Date().toISOString().split('T')[0];
     // Get all passes for this student+group
     const studentPasses = subscriptions.filter(s =>
         s.user_id === studentId &&
-        s.group_id === groupId &&
-        (s.status === 'active' || !s.status)
+        s.group_id === groupId
     );
 
     // Get all lessons for this group
@@ -212,6 +212,11 @@ export function calculateStudentGroupBalanceWithAudit(
                 const beforeExpiry = !pass.expiry_date || lesson.date <= pass.expiry_date;
 
                 if (afterStart && beforeExpiry) {
+                    // Only use archived passes for past lessons
+                    if (pass.status === 'archived' && lesson.date >= today) continue;
+                    // Also check if expired by date relative to today
+                    if (pass.expiry_date && pass.expiry_date < today && lesson.date >= today) continue;
+
                     // This pass covers the date range
                     candidatePassId = pass._id;
                     if (pass.is_consecutive) dateMatchesConsecutivePass = true;
@@ -271,7 +276,10 @@ export function calculateStudentGroupBalanceWithAudit(
     }
 
     const totalOwedCount = auditEntries.filter(e => e.status === 'counted').length;
-    const totalCapacity = studentPasses.reduce((sum, p) => sum + p.lessons_total, 0);
+    // Total capacity only includes passes that were actually used OR are still active
+    const totalCapacity = studentPasses
+        .filter(p => (p.status === 'active' || !p.status) || (passUsageMap.get(p._id) || 0) > 0)
+        .reduce((sum, p) => sum + p.lessons_total, 0);
 
     const allStudentPasses = subscriptions.filter(s =>
         s.user_id === studentId &&

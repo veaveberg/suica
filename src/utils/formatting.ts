@@ -60,3 +60,12 @@ export function formatTimeRange(time: string, duration: number): string {
 
     return `${formatT(start)}–${formatT(end)}`;
 }
+
+/**
+ * Formats a currency amount with comma decimal separator and trimmed trailing zeros.
+ * e.g. 42.50 -> "42,5", 42.00 -> "42"
+ */
+export function formatCurrency(amount: number): string {
+    if (Number.isInteger(amount)) return String(amount);
+    return Number(amount.toFixed(2)).toString().replace('.', ',');
+}

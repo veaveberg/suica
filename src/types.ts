@@ -143,4 +143,5 @@ export interface ExternalEvent {
   url?: string;
   calendarColor?: string;
   calendarName?: string;
+  calendarId?: string;
 }

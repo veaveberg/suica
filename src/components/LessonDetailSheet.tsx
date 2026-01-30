@@ -8,7 +8,7 @@ import * as api from '../api';
 import { api as convexApi } from '../../convex/_generated/api';
 import { useQuery } from 'convex/react';
 import { cancelLesson, uncancelLesson, deleteLesson } from '../db-server';
-import { formatDate, formatTimeRange } from '../utils/formatting';
+import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting';
 import { useSearchParams } from '../hooks/useSearchParams';
 import { cn } from '../utils/cn';
 import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
@@ -403,19 +403,6 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                             );
 
                                                             if (!isMarked) {
-                                                                // Show potential revenue if not marked (Only if has pass)
-                                                                if (revInfo) {
-                                                                    return (
-                                                                        <div className="flex items-center gap-2 py-0.5">
-                                                                            <span className="text-[10px] font-bold text-ios-gray/50 leading-none">
-                                                                                {revInfo.cost.toFixed(2).replace('.', ',')} ₾
-                                                                            </span>
-                                                                            <span className="text-[10px] font-normal text-ios-gray/50 leading-none">
-                                                                                {revInfo.equation}
-                                                                            </span>
-                                                                        </div>
-                                                                    );
-                                                                }
                                                                 return null;
                                                             }
 
@@ -433,23 +420,32 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                                                         </div>
                                                                     )}
                                                                     {(() => {
-                                                                        // Use revInfo if available for current synced calculation, fallback to local/record logic
+                                                                        // 1. Start with values from local virtual audit (most up-to-date with current UI state)
                                                                         let amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
-                                                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined)
-                                                                            || record?.payment_amount;
+                                                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined);
 
-                                                                        // Override with revInfo if present and marked
-                                                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) { // Valid skip is 0 usually
-                                                                            // For valid skip, cost is 0?
-                                                                            // revenue_logic calculates 'unit cost'. if we mark as valid skip, we don't charge.
-                                                                            amount = revInfo.cost;
+                                                                        // 2. If local audit doesn't have a value, check the record from DB (historical)
+                                                                        // BUT only if it's not explicitly uncovered according to our current logic
+                                                                        if (amount === undefined && !showWarning) {
+                                                                            amount = record?.payment_amount;
+                                                                        }
+
+                                                                        // 3. Override with live revenue calculation from Convex if available and marked
+                                                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) {
+                                                                            // Only override if we actually have a pass covering it according to revInfo
+                                                                            // (or if we trust revInfo's judgment on 0-cost uncovered)
+                                                                            if (revInfo.cost > 0 || studentInfo.hasActivePass) {
+                                                                                amount = revInfo.cost;
+                                                                            } else if (showWarning) {
+                                                                                amount = 0; // Explicitly 0 if uncovered
+                                                                            }
                                                                         }
 
                                                                         if (amount !== undefined && amount > 0) {
                                                                             return (
                                                                                 <div className="flex items-center gap-2 mt-1">
                                                                                     <span className="text-[10px] font-bold text-ios-gray leading-none flex-shrink-0">
-                                                                                        {Number.isInteger(amount) ? amount : amount.toFixed(2).replace('.', ',')} ₾
+                                                                                        {formatCurrency(amount)} ₾
                                                                                     </span>
                                                                                     {revInfo && studentInfo.hasActivePass && (
                                                                                         <span className="text-[10px] font-normal text-ios-gray leading-none">

@@ -7,7 +7,7 @@ import { LessonDetailSheet } from './LessonDetailSheet';
 import { useData } from '../DataProvider';
 import { deleteLessons } from '../db-server';
 import { cn } from '../utils/cn';
-import { formatDate, formatTimeRange } from '../utils/formatting';
+import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting';
 import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
 import { useSearchParams } from '../hooks/useSearchParams';
 import type { ExternalEvent } from '../types';
@@ -517,7 +517,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                         )}
                                         {lesson.total_amount !== undefined && lesson.total_amount > 0 && (
                                             <div className="flex items-center gap-1 text-ios-gray ml-1">
-                                                <span>{Number.isInteger(lesson.total_amount) ? lesson.total_amount : lesson.total_amount.toFixed(2).replace('.', ',')} ₾</span>
+                                                <span>{formatCurrency(lesson.total_amount)} ₾</span>
                                             </div>
                                         )}
                                     </div>
