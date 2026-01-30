@@ -1,3 +1,4 @@
+import React from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { convex } from './convex-client';
@@ -17,7 +18,11 @@ function useDataQuery<T>(query: any, userId?: string, skip: boolean = false) {
     const data = useQuery(query, (userId && !skip) ? { userId: userId as Id<"users"> } : "skip");
     const mappedData = (data || []).map((item: any) => ({ ...item, id: item._id }));
     const loading = (userId && !skip) ? data === undefined : false;
-    return { data: mappedData as T[], loading, refresh: async () => { } };
+
+    // Memoize refresh to prevent unnecessary effect triggers in consumers
+    const refresh = React.useCallback(async () => { /* Convex handles updates automatically */ }, []);
+
+    return { data: mappedData as T[], loading, refresh };
 }
 
 export function useGroups() {

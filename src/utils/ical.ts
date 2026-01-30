@@ -176,51 +176,70 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
 const CORS_PROXIES = [
     (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://cors.sh/${url}`,
+    (url: string) => `https://proxy.cors.sh/${url}`,
+    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
 ];
+
+// Deduplication map to prevent multiple concurrent fetches of the same URL
+const pendingFetches = new Map<string, Promise<ExternalEvent[] | null>>();
 
 // Fetch and parse an iCal feed
 // Returns null if all proxies fail
 export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise<ExternalEvent[] | null> {
-    // Convert webcal:// to https:// (iCloud uses webcal://)
-    let url = calendar.url.replace(/^webcal:\/\//i, 'https://');
+    const originalUrl = calendar.url.replace(/^webcal:\/\//i, 'https://');
 
-    // Add cache-busting parameter to ensure fresh data from the source (iCloud/Google)
-    const separator = url.includes('?') ? '&' : '?';
-    url += `${separator}_t=${Date.now()}`;
+    // Add cache-busting but round to 5 minutes to avoid spamming proxies and allow their internal caching
+    const fiveMinutesMins = 5 * 60 * 1000;
+    const roundedTime = Math.floor(Date.now() / fiveMinutesMins) * fiveMinutesMins;
+    const separator = originalUrl.includes('?') ? '&' : '?';
+    const cacheBusterUrl = `${originalUrl}${separator}_t=${roundedTime}`;
 
-    // Try each CORS proxy until one works
-    for (const makeProxyUrl of CORS_PROXIES) {
-        try {
-            const proxyUrl = makeProxyUrl(url);
-            const response = await fetch(proxyUrl, {
-                headers: {
-                    'Accept': 'text/calendar, text/plain, */*',
-                }
-            });
-
-            if (!response.ok) {
-                console.warn(`ical: Proxy failed for ${calendar.name}: ${response.status}, trying next...`);
-                continue;
-            }
-
-            const icsContent = await response.text();
-
-            // Check if it's actually iCal content
-            if (!icsContent.includes('BEGIN:VCALENDAR')) {
-                console.warn(`ical: Invalid iCal content for ${calendar.name} from proxy, trying next...`);
-                continue;
-            }
-
-            const events = parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
-            return events;
-        } catch (error) {
-            continue;
-        }
+    if (pendingFetches.has(cacheBusterUrl)) {
+        return pendingFetches.get(cacheBusterUrl)!;
     }
 
-    console.error(`ical: All proxies failed for ${calendar.name}`);
-    return null;
+    const fetchPromise = (async () => {
+        // Try each CORS proxy until one works
+        for (const makeProxyUrl of CORS_PROXIES) {
+            try {
+                const proxyUrl = makeProxyUrl(cacheBusterUrl);
+                const response = await fetch(proxyUrl, {
+                    headers: {
+                        'Accept': 'text/calendar, text/plain, */*',
+                    }
+                });
+
+                if (!response.ok) {
+                    console.warn(`ical: Proxy failed for ${calendar.name} (${response.status}), trying next...`);
+                    continue;
+                }
+
+                const icsContent = await response.text();
+
+                // Check if it's actually iCal content
+                if (!icsContent.includes('BEGIN:VCALENDAR')) {
+                    console.warn(`ical: Invalid iCal content for ${calendar.name} from proxy, trying next...`);
+                    continue;
+                }
+
+                const events = parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
+                return events;
+            } catch (error) {
+                // Network error or CORS block, try next proxy
+                continue;
+            }
+        }
+        return null;
+    })();
+
+    pendingFetches.set(cacheBusterUrl, fetchPromise);
+
+    // Clean up after it's done (with a small delay to catch near-simultaneous calls)
+    fetchPromise.finally(() => {
+        setTimeout(() => pendingFetches.delete(cacheBusterUrl), 2000);
+    });
+
+    return fetchPromise;
 }
 
 // Get events for a specific date from external events
@@ -323,6 +342,7 @@ export function openExternalEvent(event: ExternalEvent): void {
 // ============================================
 
 const EVENTS_CACHE_KEY = 'external_events_cache';
+const LAST_FETCH_KEY = 'external_events_last_fetch';
 
 // Cache for fetched events
 export function getCachedEvents(): ExternalEvent[] {
@@ -343,14 +363,24 @@ export function getCachedEvents(): ExternalEvent[] {
 
 export function cacheEvents(events: ExternalEvent[]): void {
     localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify(events));
+    localStorage.setItem(LAST_FETCH_KEY, Date.now().toString());
 }
+
+// Throttle: avoid fetching more than once every 1 minute
+const FETCH_THROTTLE_MS = 60 * 1000;
 
 // Fetch all enabled calendars and return combined events
 export async function fetchAllExternalEvents(calendars: ExternalCalendar[] | null | undefined): Promise<ExternalEvent[]> {
-    if (!calendars || calendars.length === 0) {
-        // IMPORTANT: Do NOT call cacheEvents([]) here! 
-        // If we have no calendars yet (loading or user has none), just return empty array
-        // but keep the old cache intact in case it's just a temporary loading state.
+    const cachedEvents = getCachedEvents();
+
+    // 1. Handle loading state (still waiting for Convex)
+    // If calendars is null/undefined, we are still loading. Return cache to avoid wiping UI.
+    if (!calendars) {
+        return cachedEvents;
+    }
+
+    // 2. Handle empty state (user has no calendars)
+    if (calendars.length === 0) {
         return [];
     }
 
@@ -360,10 +390,13 @@ export async function fetchAllExternalEvents(calendars: ExternalCalendar[] | nul
         return [];
     }
 
-    // Get currently cached events to use as fallback
-    const cachedEvents = getCachedEvents();
+    // 3. Throttle check
+    const lastFetch = parseInt(localStorage.getItem(LAST_FETCH_KEY) || '0');
+    if (Date.now() - lastFetch < FETCH_THROTTLE_MS && cachedEvents.length > 0) {
+        return cachedEvents;
+    }
 
-    // Fetch all in parallel
+    // 4. Fetch all in parallel
     const results = await Promise.all(enabledCalendars.map(async (calendar) => {
         try {
             const freshEvents = await fetchExternalCalendar(calendar);
