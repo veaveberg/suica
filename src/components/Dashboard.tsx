@@ -30,6 +30,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     const { lessons: dataLessons, groups, students, refreshLessons, externalCalendars, attendance } = useData();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
+    // Prioritize lessons from useData, but fallback to props if needed for some reason
+    const lessons = dataLessons || fallbackLessons;
     const { getParam, setParam } = useSearchParams();
 
     // Sync selected lesson with URL param
@@ -50,9 +52,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
             .filter(s => s.telegram_id === String(currentTgId))
             .map(s => String(s.id));
     }, [students, currentTgId]);
-
-    // Prioritize lessons from useData, but fallback to props if needed for some reason
-    const lessons = dataLessons || fallbackLessons;
     const containerRef = useRef<HTMLDivElement>(null);
     const todayRef = useRef<HTMLDivElement>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);

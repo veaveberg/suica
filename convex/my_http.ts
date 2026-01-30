@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { internalQuery } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 
+declare const process: { env: { [key: string]: string | undefined } };
+
 export const generateIcs = internalQuery({
     args: { userId: v.string(), groupId: v.optional(v.string()) }, // Receiving string ID from HTTP handler
     handler: async (ctx, args) => {
