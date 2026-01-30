@@ -158,7 +158,9 @@ export const generateIcs = internalQuery({
             icsParams.push(`DTEND:${icsEnd}`);
 
             const teacherName = group ? teacherMap.get(group.userId) : "";
-            const summary = teacherName ? `${groupName}, ${teacherName}` : groupName;
+            // Only show teacher name for students
+            const shouldShowTeacher = user!.role === 'student' && teacherName;
+            const summary = shouldShowTeacher ? `${groupName}, ${teacherName}` : groupName;
             icsParams.push(`SUMMARY:${summary}`);
 
             if (group && group.color) {
@@ -168,9 +170,13 @@ export const generateIcs = internalQuery({
                 icsParams.push(`CATEGORIES:${group.name}`);
             }
             const descriptions: string[] = [];
+            const appUrl = process.env.APP_SITE_URL || "https://suica.app";
+            const lessonUrl = `${appUrl}?lessonId=${lesson._id}`;
+
             if (user!.role === "teacher") {
                 if (lesson.notes) descriptions.push(lesson.notes);
                 if (lesson.info_for_students) descriptions.push(`Students: ${lesson.info_for_students}`);
+                icsParams.push(`URL:${lessonUrl}`);
             } else {
                 if (lesson.info_for_students) descriptions.push(lesson.info_for_students);
             }

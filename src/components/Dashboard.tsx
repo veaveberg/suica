@@ -9,6 +9,7 @@ import { deleteLessons } from '../db-server';
 import { cn } from '../utils/cn';
 import { formatDate, formatTimeRange } from '../utils/formatting';
 import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
+import { useSearchParams } from '../hooks/useSearchParams';
 import type { ExternalEvent } from '../types';
 
 interface DashboardProps {
@@ -29,6 +30,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     const { lessons: dataLessons, groups, students, refreshLessons, externalCalendars, attendance } = useData();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
+    const { getParam, setParam } = useSearchParams();
+
+    // Sync selected lesson with URL param
+    useEffect(() => {
+        const lessonId = getParam('lessonId');
+        if (lessonId && lessons.length > 0) {
+            const found = lessons.find(l => l.id === lessonId);
+            if (found) {
+                setSelectedLesson(found);
+            }
+        }
+    }, [getParam, lessons]);
 
     // Current user's student IDs across all schools they might be in
     const myStudentIds = useMemo(() => {
@@ -604,7 +617,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
 
             <LessonDetailSheet
                 lesson={selectedLesson}
-                onClose={() => setSelectedLesson(null)}
+                onClose={() => {
+                    setSelectedLesson(null);
+                    setParam('lessonId', null);
+                }}
             />
 
             {/* Floating Today Button */}
