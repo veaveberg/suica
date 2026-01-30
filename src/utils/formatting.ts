@@ -5,7 +5,7 @@ import type { i18n } from 'i18next';
  */
 export function getLocale(lang: string): string {
     const upperLang = lang.toUpperCase();
-    return upperLang === 'KA' ? 'ka-GE' : upperLang === 'RU' ? 'ru' : 'en-US';
+    return upperLang === 'KA' ? 'ka-GE' : upperLang === 'RU' ? 'ru-RU' : 'en-US';
 }
 
 export interface FormatDateOptions {
@@ -68,4 +68,27 @@ export function formatTimeRange(time: string, duration: number): string {
 export function formatCurrency(amount: number): string {
     if (Number.isInteger(amount)) return String(amount);
     return Number(amount.toFixed(2)).toString().replace('.', ',');
+}
+
+import type { Group, GroupSchedule } from '../types';
+
+/**
+ * Returns a short summary of a group's schedule (e.g. "Mon 10–11, Wed 19–20:30")
+ */
+export function getScheduleSummary(group: Group, schedules: GroupSchedule[], t: any, i18n: i18n): string {
+    const groupSchedules = schedules.filter(s => String(s.group_id) === String(group.id) && s.is_active);
+    if (groupSchedules.length === 0) return t('no_schedule') || 'No schedule';
+
+    const lang = i18n.language.toUpperCase();
+    const locale = getLocale(lang);
+
+    // Helper to format day of week
+    const getDayName = (day: number) => {
+        const date = new Date(2024, 0, day + 7); // Jan 7, 2024 was a Sunday
+        return date.toLocaleDateString(locale, { weekday: 'short' });
+    };
+
+    return groupSchedules
+        .map(s => `${getDayName(s.day_of_week)} ${formatTimeRange(s.time, s.duration_minutes || group.default_duration_minutes || 60)}`)
+        .join(', ');
 }

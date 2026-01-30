@@ -292,6 +292,24 @@ export async function updateStudent(id: string, data: Partial<Student>): Promise
     });
 }
 
+export async function archiveStudent(id: string): Promise<void> {
+    const userId = getAuthUserId();
+    await convex.mutation(api.students.update, {
+        userId: userId as Id<"users">,
+        id: id as Id<"students">,
+        updates: { status: 'archived' }
+    });
+}
+
+export async function restoreStudent(id: string): Promise<void> {
+    const userId = getAuthUserId();
+    await convex.mutation(api.students.update, {
+        userId: userId as Id<"users">,
+        id: id as Id<"students">,
+        updates: { status: 'active' }
+    });
+}
+
 // ============================================
 // SUBSCRIPTION FUNCTIONS
 // ============================================

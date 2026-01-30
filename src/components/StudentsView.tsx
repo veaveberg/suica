@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus } from 'lucide-react';
+import { Search, UserPlus, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import * as api from '../api';
@@ -20,6 +20,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
     const { setParam } = useSearchParams();
+    const [showArchived, setShowArchived] = useState(false);
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
 
@@ -39,6 +40,9 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                 s.telegram_username?.toLowerCase().includes(search.toLowerCase()) ||
                 s.instagram_username?.toLowerCase().includes(search.toLowerCase());
         });
+
+    const activeStudents = filteredStudents.filter(s => s.status !== 'archived');
+    const archivedStudents = filteredStudents.filter(s => s.status === 'archived');
 
     const getStudentGroups = (studentId: string) => {
         const groupIds = studentGroups.filter(sg => String(sg.student_id) === String(studentId)).map(sg => sg.group_id);
@@ -94,7 +98,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
             {/* Students List */}
             <div className="space-y-2">
-                {filteredStudents.map(student => {
+                {activeStudents.map(student => {
                     const studentGroupsList = getStudentGroups(student.id!);
 
                     return (
@@ -170,12 +174,54 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     );
                 })}
 
-                {filteredStudents.length === 0 && (
+                {activeStudents.length === 0 && (
                     <div className="text-center py-12 text-ios-gray">
                         {search ? t('nothing_found') : t('no_students')}
                     </div>
                 )}
             </div>
+
+            {/* Archived Section */}
+            {archivedStudents.length > 0 && (
+                <div className="pt-2">
+                    <button
+                        onClick={() => setShowArchived(!showArchived)}
+                        className="flex items-center gap-2 py-2 text-ios-gray px-1 active:opacity-60 transition-opacity"
+                    >
+                        {showArchived ? (
+                            <ChevronDown className="w-4 h-4" />
+                        ) : (
+                            <ChevronRight className="w-4 h-4" />
+                        )}
+                        <Archive className="w-4 h-4" />
+                        <span className="text-sm font-medium">
+                            {t('archived')} ({archivedStudents.length})
+                        </span>
+                    </button>
+
+                    {showArchived && (
+                        <div className="space-y-2 mt-2 opacity-60">
+                            {archivedStudents.map(student => (
+                                <button
+                                    key={student.id}
+                                    onClick={() => openEditMode(student)}
+                                    className="w-full text-left ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 flex items-center justify-between p-4 rounded-2xl active:scale-[0.98] transition-transform"
+                                >
+                                    <div className="flex-1">
+                                        <div className="flex items-baseline gap-2">
+                                            <h3 className="font-semibold dark:text-white truncate">{student.name}</h3>
+                                            {student.telegram_username && (
+                                                <span className="text-xs text-ios-gray">@{student.telegram_username}</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="w-5 h-5 text-ios-gray" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
         </div>
     );

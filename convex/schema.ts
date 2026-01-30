@@ -29,6 +29,7 @@ export default defineSchema({
         notes: v.optional(v.string()),
         balance_notes: v.optional(v.string()),
         userId: v.string(), // The teacher (owner)
+        status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
     })
         .index("by_user", ["userId"])
         .index("by_telegram_id", ["telegram_id"])

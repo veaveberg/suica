@@ -169,7 +169,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
             <div className="relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col overscroll-y-contain">

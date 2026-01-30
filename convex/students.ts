@@ -93,6 +93,7 @@ export const update = mutation({
             instagram_username: v.optional(v.string()),
             notes: v.optional(v.string()),
             balance_notes: v.optional(v.string()),
+            status: v.optional(v.union(v.literal("active"), v.literal("archived"))),
         }),
     },
     handler: async (ctx, args) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ban, Calendar, Clock, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle } from 'lucide-react';
+import { X, Ban, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle, Plus, Settings, Calendar, Clock, CalendarClock } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
@@ -13,15 +13,24 @@ import { useSearchParams } from '../hooks/useSearchParams';
 import { cn } from '../utils/cn';
 import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import type { Attendance } from '../types';
+import { StudentSelector } from './StudentSelector';
+import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
 
 interface LessonDetailSheetProps {
     lesson: Lesson | null;
     onClose: () => void;
 }
 
-export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, onClose }) => {
+export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: propLesson, onClose }) => {
     const { t, i18n } = useTranslation();
     const { groups, students, studentGroups, refreshLessons, attendance: allAttendance, subscriptions, lessons } = useData();
+
+    // Derive the latest version of the lesson from global data
+    const lesson = useMemo(() => {
+        if (!propLesson) return null;
+        return lessons.find(l => l.id === propLesson.id) || propLesson;
+    }, [propLesson, lessons]);
+
     const { setParam } = useSearchParams();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isAdmin = convexUser?.role === 'admin';
@@ -34,9 +43,11 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     const [showReschedule, setShowReschedule] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [newDate, setNewDate] = useState(lesson?.date || '');
-    const [newTime, setNewTime] = useState('');
+    const [newTime, setNewTime] = useState(lesson?.time || '');
+    const [newDuration, setNewDuration] = useState<number | string>(lesson?.duration_minutes || 60);
     const skipTimerRef = useRef<any>(null);
     const isLongPressRef = useRef(false);
+    const [showStudentSelector, setShowStudentSelector] = useState(false);
 
     // Get group info
     const group = lesson ? groups.find(g => String(g.id) === String(lesson.group_id)) : null;
@@ -121,7 +132,10 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
             setInfoForStudents(lesson.info_for_students || '');
             setNewDate(lesson.date);
             setNewTime(lesson.time);
+            setNewDuration(lesson.duration_minutes);
             setIsCompleted(lesson.status === 'completed');
+            setShowDeleteConfirm(false);
+            setShowReschedule(false);
             // Load attendance records
             api.queryByField<{ student_id: string, status: AttendanceStatus }>('attendance', 'lesson_id', lesson.id!)
                 .then(records => {
@@ -139,6 +153,8 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
             setNotes('');
             setInfoForStudents('');
             setIsCompleted(false);
+            setShowDeleteConfirm(false);
+            setShowReschedule(false);
         }
     }, [lesson]);
 
@@ -194,7 +210,6 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
             await cancelLesson(lesson.id);
         }
         await refreshLessons();
-        onClose();
     };
 
     const handleDelete = async () => {
@@ -209,15 +224,31 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
     };
 
     const handleReschedule = async () => {
-        if (!newDate || !newTime) return;
+        if (!lesson?.id || !newDate || !newTime) return;
 
-        await api.update('lessons', lesson.id!, {
+        await api.update('lessons', lesson.id, {
             date: newDate,
-            time: newTime
+            time: newTime,
+            duration_minutes: Number(newDuration)
         });
         await refreshLessons();
         setShowReschedule(false);
-        onClose();
+    };
+
+    const handleStudentSelection = async (newSelectedIds: string[]) => {
+        if (!lesson?.group_id) return;
+        const currentIds = groupStudents.map(s => String(s.id));
+        const toAdd = newSelectedIds.filter(id => !currentIds.includes(String(id)));
+        const toRemove = currentIds.filter(id => !newSelectedIds.map(String).includes(String(id)));
+
+        for (const id of toAdd) {
+            await addStudentToGroup(id, lesson.group_id);
+        }
+        for (const id of toRemove) {
+            await removeStudentFromGroup(id, lesson.group_id);
+        }
+
+        await refreshLessons();
     };
 
     return (
@@ -230,9 +261,15 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                     <button onClick={onClose} className="p-1">
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
-                    <h2 className="font-bold text-lg dark:text-white">
-                        {group?.name || 'Lesson'}
-                    </h2>
+                    <div className="flex-1 flex justify-center min-w-0 px-2">
+                        <h2 className="font-bold text-lg dark:text-white flex items-center gap-2 truncate">
+                            <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: group?.color || '#007AFF' }}
+                            />
+                            <span className="truncate">{group?.name || t('class')}</span>
+                        </h2>
+                    </div>
                     {!isStudent ? (
                         <button onClick={handleSave} className="text-ios-blue font-semibold">
                             {t('save')}
@@ -243,57 +280,153 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                    {/* Date/Time Info */}
-                    <div className="flex items-center gap-4 p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl">
-                        <div
-                            className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                            style={{ backgroundColor: group?.color || '#007AFF' }}
-                        >
-                            <Calendar className="w-6 h-6 text-white" />
-                        </div>
+
+                    {/* Date/Time Info & Action Buttons */}
+                    <div className="space-y-4 px-1">
                         <div>
-                            <p className="font-bold dark:text-white">
+                            <p className="text-xl font-bold dark:text-white">
                                 {(() => {
                                     const d = new Date();
                                     const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                    return lesson.date === todayStr;
-                                })() ? `${t('today')}, ${formatDate(lesson.date, i18n)}`
-                                    : formatDate(lesson.date, i18n)}
-                            </p>
-                            <p className="text-ios-gray">
-                                {formatTimeRange(lesson.time, lesson.duration_minutes)}, {lesson.duration_minutes} {t('minutes')}
+                                    const dateStr = lesson.date === todayStr ? `${t('today')}, ${formatDate(lesson.date, i18n)}` : formatDate(lesson.date, i18n);
+                                    return dateStr;
+                                })()}
+                                &nbsp;&nbsp;
+                                <span className="text-ios-gray font-normal text-lg">
+                                    {formatTimeRange(lesson.time, lesson.duration_minutes)}, {lesson.duration_minutes} {t('minutes')}
+                                </span>
                             </p>
                         </div>
+
+                        {!isStudent && (
+                            <div className="space-y-4">
+                                {!showReschedule && !showDeleteConfirm && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={handleCancel}
+                                            className={`flex items-center justify-center gap-2 py-3 rounded-xl font-medium active:scale-[0.98] transition-transform text-sm dark:text-white ${lesson.status === 'cancelled'
+                                                ? 'bg-green-500/10'
+                                                : 'bg-orange-500/10'
+                                                }`}
+                                        >
+                                            <Ban className={`w-4 h-4 ${lesson.status === 'cancelled' ? 'text-ios-green' : 'text-ios-orange'}`} />
+                                            {lesson.status === 'cancelled' ? (t('restore') || 'Restore') : (t('skip') || 'Skip')}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowReschedule(true)}
+                                            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-500/10 font-medium active:scale-[0.98] transition-transform text-sm dark:text-white"
+                                        >
+                                            <CalendarClock className="w-4 h-4 text-ios-blue" />
+                                            {t('reschedule') || 'Reschedule'}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowDeleteConfirm(true)}
+                                            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 text-ios-red font-medium active:scale-[0.98] transition-transform text-sm"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                            {t('delete')}
+                                        </button>
+                                        <button
+                                            onClick={() => setParam('groupId', group?.id || null)}
+                                            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-500/10 dark:bg-zinc-800 font-medium active:scale-[0.98] transition-transform text-sm dark:text-white"
+                                        >
+                                            <Settings className="w-4 h-4 text-ios-gray" />
+                                            {t('edit_group') || 'Group'}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Reschedule Form - Moved here */}
+                                {showReschedule && (
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-[2fr_1.2fr_85px] gap-2">
+                                            <div>
+                                                <label className="text-sm text-ios-gray uppercase font-semibold block mb-1 pl-1">{t('date') || 'Date'}</label>
+                                                <div className="relative flex items-center bg-ios-background dark:bg-zinc-800 rounded-xl px-3">
+                                                    <Calendar className="w-4 h-4 text-ios-gray flex-shrink-0" />
+                                                    <input
+                                                        type="date"
+                                                        value={newDate}
+                                                        onChange={(e) => setNewDate(e.target.value)}
+                                                        className="w-full py-2.5 pl-2 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm text-ios-gray uppercase font-semibold block mb-1 pl-1">{t('time') || 'Time'}</label>
+                                                <div className="relative flex items-center bg-ios-background dark:bg-zinc-800 rounded-xl px-3">
+                                                    <Clock className="w-4 h-4 text-ios-gray flex-shrink-0" />
+                                                    <input
+                                                        type="time"
+                                                        value={newTime}
+                                                        onChange={(e) => setNewTime(e.target.value)}
+                                                        className="w-full py-2.5 pl-2 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-sm text-ios-gray uppercase font-semibold block mb-1 pl-1">&nbsp;</label>
+                                                <div className="flex items-baseline bg-ios-background dark:bg-zinc-800 rounded-xl px-2.5">
+                                                    <input
+                                                        type="number"
+                                                        inputMode="numeric"
+                                                        pattern="[0-9]*"
+                                                        value={newDuration}
+                                                        onChange={(e) => setNewDuration(e.target.value)}
+                                                        onFocus={(e) => e.target.select()}
+                                                        onBlur={() => {
+                                                            if (newDuration === '') setNewDuration(0);
+                                                        }}
+                                                        className="w-full py-2.5 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-right"
+                                                    />
+                                                    <span className="text-base text-ios-gray pointer-events-none ml-1">
+                                                        {t('minutes') || 'min'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setShowReschedule(false)}
+                                                className="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-zinc-800 font-medium dark:text-white text-sm"
+                                            >
+                                                {t('cancel')}
+                                            </button>
+                                            <button
+                                                onClick={handleReschedule}
+                                                className="flex-1 py-3 rounded-xl bg-ios-blue text-white font-medium text-sm shadow-lg shadow-ios-blue/20"
+                                            >
+                                                {t('save')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {showDeleteConfirm && (
+                            <div className="bg-ios-red/10 p-4 rounded-2xl space-y-3">
+                                <p className="text-ios-red text-sm font-medium text-center">
+                                    {t('confirm_delete_lesson')}
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(false)}
+                                        className="flex-1 py-3 rounded-xl bg-white dark:bg-zinc-800 font-medium dark:text-white shadow-sm"
+                                    >
+                                        {t('cancel')}
+                                    </button>
+                                    <button
+                                        onClick={handleDelete}
+                                        className="flex-1 py-3 rounded-xl bg-ios-red text-white font-medium shadow-sm"
+                                    >
+                                        {t('confirm_delete')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Status Segmented Control */}
-                    {lesson.status !== 'cancelled' && (
-                        <div className="space-y-2">
-                            <span className="text-sm font-semibold text-ios-gray uppercase px-1">
-                                {t('status') || 'Status'}
-                            </span>
-                            <div className="flex p-1 bg-ios-background dark:bg-zinc-800 rounded-xl">
-                                <button
-                                    onClick={() => !isStudent && setIsCompleted(false)}
-                                    className={`flex-1 py-3 rounded-lg font-medium transition-all ${!isCompleted
-                                        ? 'bg-white dark:bg-zinc-700 text-ios-blue shadow-sm'
-                                        : 'text-ios-gray'
-                                        }`}
-                                >
-                                    {t('not_marked') || 'Not marked'}
-                                </button>
-                                <button
-                                    onClick={() => !isStudent && setIsCompleted(true)}
-                                    className={`flex-1 py-3 rounded-lg font-medium transition-all ${isCompleted
-                                        ? 'bg-white dark:bg-zinc-700 text-ios-green shadow-sm'
-                                        : 'text-ios-gray'
-                                        }`}
-                                >
-                                    {t('completed')}
-                                </button>
-                            </div>
-                        </div>
-                    )}
 
                     {lesson.status === 'cancelled' && (
                         <div className="p-4 bg-ios-red/10 rounded-2xl text-center">
@@ -301,14 +434,26 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                         </div>
                     )}
 
-                    {/* Attendance */}
+                    {/* Students Section */}
                     {lesson.status !== 'cancelled' && (
                         <div className="space-y-3">
-                            <div className="flex items-center gap-2 px-1">
-                                <Users className="w-4 h-4 text-ios-gray" />
-                                <span className="text-sm font-semibold text-ios-gray uppercase">
-                                    {t('attendance')} ({selected.length}/{groupStudents.length})
-                                </span>
+                            <div className="flex items-center justify-between px-1">
+                                <div className="flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-ios-gray" />
+                                    <span className="text-sm font-semibold text-ios-gray uppercase">
+                                        {t('students')} ({selected.length}/{groupStudents.length})
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    {!isStudent && (
+                                        <button
+                                            onClick={() => setShowStudentSelector(true)}
+                                            className="text-ios-blue p-1 active:scale-90 transition-transform"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="space-y-2">
@@ -512,10 +657,35 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                                 )}
                             </div>
 
+                            {/* Status Segmented Control (End of students section) */}
+                            <div className="pt-2">
+                                <div className="flex p-1 bg-ios-background dark:bg-zinc-800 rounded-xl">
+                                    <button
+                                        onClick={() => !isStudent && setIsCompleted(false)}
+                                        className={`flex-1 py-3 rounded-lg font-medium transition-all ${!isCompleted
+                                            ? 'bg-white dark:bg-zinc-700 text-ios-blue shadow-sm'
+                                            : 'text-ios-gray'
+                                            }`}
+                                    >
+                                        {t('status_not_marked_yet') || 'Not marked yet'}
+                                    </button>
+                                    <button
+                                        onClick={() => !isStudent && setIsCompleted(true)}
+                                        className={`flex-1 py-3 rounded-lg font-medium transition-all ${isCompleted
+                                            ? 'bg-white dark:bg-zinc-700 text-ios-green shadow-sm'
+                                            : 'text-ios-gray'
+                                            }`}
+                                    >
+                                        {t('status_everyone_marked') || 'Everyone is marked'}
+                                    </button>
+                                </div>
+                            </div>
+
+
                             {/* Notes */}
                             <div className="pt-2">
                                 <label className="block text-sm font-semibold text-ios-gray mb-1 uppercase px-1">
-                                    {t('notes')}
+                                    {t('my_note')}
                                 </label>
                                 <textarea
                                     value={notes}
@@ -542,104 +712,17 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson, on
                         </div>
                     )}
 
-                    {/* Reschedule Section */}
-                    {showReschedule && (
-                        <div className="p-4 bg-ios-background dark:bg-zinc-800 rounded-2xl space-y-4">
-                            <h3 className="font-semibold dark:text-white">{t('reschedule')}</h3>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs text-ios-gray uppercase">{t('new_date')}</label>
-                                    <input
-                                        type="date"
-                                        value={newDate}
-                                        onChange={(e) => setNewDate(e.target.value)}
-                                        className="w-full p-3 rounded-xl bg-ios-card dark:bg-zinc-700 dark:text-white"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-ios-gray uppercase">{t('new_time')}</label>
-                                    <input
-                                        type="time"
-                                        value={newTime}
-                                        onChange={(e) => setNewTime(e.target.value)}
-                                        className="w-full p-3 rounded-xl bg-ios-card dark:bg-zinc-700 dark:text-white"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setShowReschedule(false)}
-                                    className="flex-1 py-3 rounded-xl bg-gray-200 dark:bg-zinc-700 font-medium dark:text-white"
-                                >
-                                    {t('cancel')}
-                                </button>
-                                <button
-                                    onClick={handleReschedule}
-                                    className="flex-1 py-3 rounded-xl bg-ios-blue text-white font-medium"
-                                >
-                                    {t('save')}
-                                </button>
-                            </div>
-                        </div>
-                    )}
 
-                    {/* Action Buttons */}
-                    {!isStudent && (
-                        <div className="space-y-3 pt-2">
-                            {!showReschedule && (
-                                <button
-                                    onClick={() => setShowReschedule(true)}
-                                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-background dark:bg-zinc-800 font-medium dark:text-white active:scale-[0.98] transition-transform"
-                                >
-                                    <Clock className="w-5 h-5 text-ios-blue" />
-                                    {t('reschedule') || 'Reschedule'}
-                                </button>
-                            )}
-
-                            <button
-                                onClick={handleCancel}
-                                className={`w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-medium active:scale-[0.98] transition-transform ${lesson.status === 'cancelled'
-                                    ? 'bg-ios-green/10 text-ios-green'
-                                    : 'bg-ios-red/10 text-ios-red'
-                                    }`}
-                            >
-                                <Ban className="w-5 h-5" />
-                                {lesson.status === 'cancelled' ? (t('uncancel_lesson') || 'Restore') : (t('cancel_lesson') || 'Skip')}
-                            </button>
-
-                            {!showDeleteConfirm ? (
-                                <button
-                                    onClick={() => setShowDeleteConfirm(true)}
-                                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-ios-red/10 text-ios-red font-medium active:scale-[0.98] transition-transform"
-                                >
-                                    <Trash2 className="w-5 h-5" />
-                                    {t('delete_lesson')}
-                                </button>
-                            ) : (
-                                <div className="bg-ios-red/10 p-4 rounded-2xl space-y-3">
-                                    <p className="text-ios-red text-sm font-medium text-center">
-                                        {t('confirm_delete_lesson')}
-                                    </p>
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => setShowDeleteConfirm(false)}
-                                            className="flex-1 py-3 rounded-xl bg-white dark:bg-zinc-800 font-medium dark:text-white shadow-sm"
-                                        >
-                                            {t('cancel')}
-                                        </button>
-                                        <button
-                                            onClick={handleDelete}
-                                            className="flex-1 py-3 rounded-xl bg-ios-red text-white font-medium shadow-sm"
-                                        >
-                                            {t('confirm_delete')}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
-        </div>
+
+            <StudentSelector
+                isOpen={showStudentSelector}
+                onClose={() => setShowStudentSelector(false)}
+                onSelect={handleStudentSelection}
+                allStudents={students}
+                initialSelectedIds={groupStudents.map(s => String(s.id))}
+            />
+        </div >
     );
 };

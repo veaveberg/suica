@@ -10,6 +10,7 @@ import { StudentsView } from './StudentsView'
 import { PassesView } from './PassesView'
 import { SettingsSheet } from './SettingsSheet'
 import { StudentCard } from './StudentCard'
+import { GroupDetailSheet } from './GroupDetailSheet'
 import { useData } from '../DataProvider'
 import { syncLessonsFromSchedule } from '../db'
 import * as api from '../api'
@@ -70,8 +71,17 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         }
     }
 
-    const { students, lessons, subscriptions, refreshLessons, refreshSubscriptions } = useData()
+    const { students, groups, lessons, subscriptions, refreshLessons, refreshSubscriptions } = useData()
     const selectedStudent = students.find(s => String(s.id) === studentIdParam) || null
+
+    // Sync Group Sheet
+    const groupIdParam = getParam('groupId')
+    const setShowGroup = (show: boolean) => {
+        if (!show) {
+            setParam('groupId', null)
+        }
+    }
+    const selectedGroup = groups.find(g => String(g.id) === groupIdParam) || null
 
     const handleBuySubscription = async (newSub: Omit<Subscription, 'id'>) => {
         await api.create<Subscription>('subscriptions', newSub);
@@ -220,6 +230,14 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                 onBuySubscription={handleBuySubscription}
                 readOnly={isStudentGlobal || (!!selectedStudent && !!convexUser?.tokenIdentifier && selectedStudent.userId !== convexUser.tokenIdentifier && convexUser.role !== 'admin')}
             />
+
+            {/* Global Group Sheet */}
+            {selectedGroup && (
+                <GroupDetailSheet
+                    group={selectedGroup}
+                    onClose={() => setShowGroup(false)}
+                />
+            )}
         </div>
     )
 }

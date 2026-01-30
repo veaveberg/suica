@@ -52,7 +52,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
             name: name.trim(),
             telegram_username: tgUsername.trim() || undefined,
             instagram_username: igUsername.trim() || undefined,
-            notes: notes.trim() || undefined
+            notes: notes.trim() || undefined,
+            status: 'active'
         };
 
         const addedStudent = await api.create<Student>('students', newStudent);

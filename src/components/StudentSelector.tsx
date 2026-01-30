@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, CheckCircle2 } from 'lucide-react';
+import { Search, Check, UserPlus } from 'lucide-react';
+import { useTelegram } from './TelegramProvider';
+import { useData } from '../DataProvider';
+import * as api from '../api';
+import { useSearchParams } from '../hooks/useSearchParams';
 import type { Student } from '../types';
 import { cn } from '../utils/cn';
 
@@ -20,8 +24,12 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     initialSelectedIds
 }) => {
     const { t } = useTranslation();
+    const { refreshStudents } = useData();
+    const { userId: currentTgId } = useTelegram();
+    const { setParam } = useSearchParams();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
+    const [isCreating, setIsCreating] = useState(false);
 
     // Reset selection when opening if needed, but here we use initialSelectedIds
     useMemo(() => {
@@ -32,8 +40,11 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
 
     const filteredStudents = useMemo(() => {
         return allStudents.filter(s =>
-            s.name.trim().length > 0 &&
-            s.name.toLowerCase().includes(searchQuery.toLowerCase())
+            s.name.trim().length > 0 && (
+                s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.telegram_username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.instagram_username?.toLowerCase().includes(searchQuery.toLowerCase())
+            )
         ).sort((a, b) => a.name.localeCompare(b.name));
     }, [allStudents, searchQuery]);
 
@@ -45,6 +56,25 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
             newSelected.add(id);
         }
         setSelectedIds(newSelected);
+    };
+
+    const handleCreateStudent = async () => {
+        if (isCreating) return;
+        setIsCreating(true);
+        try {
+            const newStudent = await api.create<Student>('students', {
+                name: '',
+            });
+
+            if (currentTgId) {
+                newStudent.userId = String(currentTgId);
+            }
+
+            await refreshStudents();
+            setParam('studentId', String(newStudent.id));
+        } finally {
+            setIsCreating(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -69,22 +99,29 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
                         }}
                         className="text-ios-blue font-bold text-lg px-2 active:opacity-50"
                     >
-                        {t('done') || 'Done'}
+                        {t('done')}
                     </button>
                 </div>
 
                 {/* Search Bar */}
-                <div className="shrink-0 p-3 bg-ios-background dark:bg-black">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ios-gray" />
+                <div className="shrink-0 p-4 bg-ios-background dark:bg-black flex gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ios-gray" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder={t('search')}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-200/50 dark:bg-zinc-800 dark:text-white rounded-xl outline-none"
+                            className="w-full pl-12 pr-4 py-3 rounded-2xl bg-ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 focus:ring-2 focus:ring-ios-blue dark:text-white shadow-sm outline-none"
                         />
                     </div>
+                    <button
+                        onClick={handleCreateStudent}
+                        disabled={isCreating}
+                        className="p-3 rounded-2xl bg-ios-blue text-white active:scale-90 transition-transform disabled:opacity-50"
+                    >
+                        <UserPlus className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {/* Students List in Grouped Style */}
@@ -101,10 +138,15 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
                                         index !== 0 && "border-t border-gray-100 dark:border-zinc-800"
                                     )}
                                 >
-                                    <span className="text-[17px] font-medium dark:text-white">{student.name}</span>
+                                    <div className="flex flex-col">
+                                        <span className="text-[17px] font-medium dark:text-white leading-tight">{student.name}</span>
+                                        {student.telegram_username && (
+                                            <span className="text-[13px] text-ios-gray">@{student.telegram_username}</span>
+                                        )}
+                                    </div>
                                     {isSelected ? (
                                         <div className="w-6 h-6 rounded-full bg-ios-blue flex items-center justify-center">
-                                            <CheckCircle2 className="w-4 h-4 text-white" />
+                                            <Check className="w-4 h-4 text-white" />
                                         </div>
                                     ) : (
                                         <div className="w-6 h-6 rounded-full border-2 border-gray-200 dark:border-zinc-700" />

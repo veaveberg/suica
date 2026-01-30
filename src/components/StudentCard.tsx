@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, AlertCircle, Layers, Instagram, CreditCard, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { X, Plus, AlertCircle, Layers, Instagram, CreditCard, ChevronDown, ChevronUp, ChevronRight, Trash2, Archive, RotateCcw } from 'lucide-react';
 import type { Subscription, Student, Group } from '../types';
 import { BuySubscriptionModal } from './BuySubscriptionModal';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
 import { BalanceAuditSheet } from './BalanceAuditSheet';
 import { PassCard } from './PassCard';
 import { useData } from '../DataProvider';
-import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
+import { addStudentToGroup, removeStudentFromGroup, archiveStudent, restoreStudent } from '../db-server';
 import * as api from '../api';
 import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import type { BalanceAuditResult } from '../utils/balance';
@@ -44,6 +44,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const [editingSub, setEditingSub] = useState<Subscription | null>(null);
     const [isArchiveOpen, setIsArchiveOpen] = useState(false);
     const [auditingGroup, setAuditingGroup] = useState<{ groupId: string; group: Group; auditResult: BalanceAuditResult } | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const lastInitializedId = React.useRef<string | null>(null);
 
     const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, subscriptions: allSubscriptions, lessons, passes, attendance } = useData();
     const activeGroups = allGroupsRaw.filter(g => g.status === 'active');
@@ -51,11 +53,21 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     // Reset edit state when student changes or sheet opens
     useEffect(() => {
         if (student && isOpen) {
-            setEditName(student.name || '');
-            setEditTelegram(student.telegram_username || '');
-            setEditInstagram(student.instagram_username || '');
-            setEditNotes(student.notes || '');
-            setEditingSub(null);
+            // Only initialize if it's a DIFFERENT student or if we haven't initialized yet
+            if (lastInitializedId.current !== student.id) {
+                setEditName(student.name || '');
+                setEditTelegram(student.telegram_username || '');
+                setEditInstagram(student.instagram_username || '');
+                setEditNotes(student.notes || '');
+                setEditingSub(null);
+                setShowDeleteConfirm(false);
+                setAddingToGroup(false);
+                lastInitializedId.current = student.id || null;
+            }
+        } else if (!isOpen) {
+            lastInitializedId.current = null;
+            setShowDeleteConfirm(false);
+            setAddingToGroup(false);
         }
     }, [student, isOpen]);
 
@@ -116,11 +128,49 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             await api.remove('students', student.id);
             await refreshStudents();
         }
+        setShowDeleteConfirm(false);
         onClose();
+    };
+
+    const handleDelete = async () => {
+        if (!student.id) return;
+        try {
+            await api.remove('students', student.id);
+            await refreshStudents();
+            onClose();
+        } catch (error) {
+            console.error('Failed to delete student:', error);
+            alert('Failed to delete student');
+        }
+    };
+
+    const handleArchive = async () => {
+        if (!student.id) return;
+        try {
+            await archiveStudent(student.id);
+            await refreshStudents();
+            onClose();
+        } catch (error) {
+            console.error('Failed to archive student:', error);
+            alert('Failed to archive student');
+        }
+    };
+
+    const handleRestore = async () => {
+        if (!student.id) return;
+        try {
+            await restoreStudent(student.id);
+            await refreshStudents();
+            onClose();
+        } catch (error) {
+            console.error('Failed to restore student:', error);
+            alert('Failed to restore student');
+        }
     };
 
     const today = new Date().toISOString().split('T')[0];
     const studentIdStr = String(student.id);
+    const isArchived = student.status === 'archived';
 
     // In the new balance-based system, active passes are those that are not archived/expired
     const activeSubs = allSubscriptions.filter(s => {
@@ -132,10 +182,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
     const historySubs = allSubscriptions.filter(s => {
         const isStudent = String(s.user_id) === studentIdStr;
-        const isArchived = s.status === 'archived';
+        const isArchivedSub = s.status === 'archived';
         const isExpired = s.expiry_date && s.expiry_date < today;
         // Show in history if it's explicitly archived OR if it's expired
-        return isStudent && (isArchived || isExpired);
+        return isStudent && (isArchivedSub || isExpired);
     });
 
     // handleDeleteSub and handleArchiveSub removed as they are now handled by SubscriptionDetailSheet
@@ -152,9 +202,9 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             <X className="w-6 h-6 text-ios-gray" />
                         </button>
                         <h2 className="font-bold text-lg dark:text-white truncate max-w-[200px]">
-                            {student.name || t('add_student')}
+                            {isArchived ? t('archived_student') || 'Archived' : (student.name || t('add_student'))}
                         </h2>
-                        {!readOnly && (
+                        {!readOnly && !isArchived && (
                             <button
                                 onClick={handleSave}
                                 disabled={!editName.trim()}
@@ -163,6 +213,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 {t('save')}
                             </button>
                         )}
+                        {isArchived && <div className="w-10" />}
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -175,8 +226,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     value={editName}
                                     autoFocus={!student.name}
                                     onChange={(e) => setEditName(e.target.value)}
-                                    readOnly={readOnly}
-                                    className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
+                                    readOnly={readOnly || isArchived}
+                                    className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                     placeholder={t('student_name')}
                                 />
                             </div>
@@ -189,8 +240,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             type="text"
                                             value={editTelegram}
                                             onChange={(e) => setEditTelegram(e.target.value)}
-                                            readOnly={readOnly}
-                                            className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
+                                            readOnly={readOnly || isArchived}
+                                            className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                             placeholder="username"
                                         />
                                     </div>
@@ -227,8 +278,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         type="text"
                                         value={editInstagram}
                                         onChange={(e) => setEditInstagram(e.target.value)}
-                                        readOnly={readOnly}
-                                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
+                                        readOnly={readOnly || isArchived}
+                                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                         placeholder="username"
                                     />
                                 </div>
@@ -253,8 +304,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <textarea
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
-                                    readOnly={readOnly}
-                                    className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none"
+                                    readOnly={readOnly || isArchived}
+                                    className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none disabled:opacity-50"
                                     placeholder={t('note') || 'Note'}
                                     rows={2}
                                 />
@@ -279,7 +330,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             style={{ backgroundColor: group.color }}
                                         />
                                         <span className="text-sm font-medium dark:text-white">{group.name}</span>
-                                        {!readOnly && (
+                                        {!readOnly && !isArchived && (
                                             <button
                                                 onClick={async () => {
                                                     await removeStudentFromGroup(student.id!, group.id!);
@@ -294,7 +345,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 ))}
 
                                 {/* Add group button */}
-                                {!readOnly && !addingToGroup && (
+                                {!readOnly && !isArchived && !addingToGroup && (
                                     <button
                                         onClick={() => setAddingToGroup(true)}
                                         className="flex items-center gap-1 px-3 py-2 bg-ios-background dark:bg-zinc-800 rounded-xl text-ios-blue active:scale-95 transition-transform"
@@ -420,10 +471,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         {!readOnly && (
                                             <button
                                                 onClick={() => setIsBuyModalOpen(true)}
-                                                className="flex items-center gap-1 text-ios-blue text-xs font-bold active:scale-95 transition-transform"
+                                                className="flex items-center gap-1 text-ios-blue font-semibold active:scale-95 transition-transform"
                                             >
                                                 <Plus className="w-4 h-4" />
-                                                {t('add')}
+                                                <span className="text-xs uppercase tracking-tight">{t('buy_pass')}</span>
                                             </button>
                                         )}
                                     </div>
@@ -504,6 +555,55 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     </section>
                                 )}
                             </>
+                        )}
+
+                        {/* Archive / Restore / Delete Section */}
+                        {!readOnly && student.id && (
+                            <div className="pt-4 border-t border-gray-100 dark:border-zinc-800 space-y-3">
+                                {!isArchived ? (
+                                    <button
+                                        onClick={handleArchive}
+                                        className="w-full py-3 flex items-center justify-center gap-2 bg-ios-gray/10 text-ios-gray rounded-xl font-semibold active:opacity-60 transition-opacity"
+                                    >
+                                        <Archive className="w-5 h-5" />
+                                        <span>{t('archive_student') || 'Archive Student'}</span>
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleRestore}
+                                        className="w-full py-3 flex items-center justify-center gap-2 bg-ios-green/10 text-ios-green rounded-xl font-semibold active:opacity-60 transition-opacity"
+                                    >
+                                        <RotateCcw className="w-5 h-5" />
+                                        <span>{t('restore_student') || 'Restore Student'}</span>
+                                    </button>
+                                )}
+
+                                {showDeleteConfirm ? (
+                                    <div className="flex gap-2 animate-in fade-in zoom-in duration-200">
+                                        <button
+                                            onClick={() => setShowDeleteConfirm(false)}
+                                            className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-zinc-800 font-medium dark:text-white text-sm"
+                                        >
+                                            {t('cancel')}
+                                        </button>
+                                        <button
+                                            onClick={handleDelete}
+                                            className="flex-1 py-3 rounded-xl bg-ios-red text-white font-bold text-sm"
+                                        >
+                                            {t('confirm_delete')}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowDeleteConfirm(true)}
+                                        className="w-full py-3 flex items-center justify-center gap-2 text-ios-red font-medium active:opacity-60 transition-opacity"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                        <span>{t('delete_student')}</span>
+                                    </button>
+                                )
+                                }
+                            </div>
                         )}
                     </div>
                 </div >

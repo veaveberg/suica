@@ -19,6 +19,7 @@ export interface Student {
   instagram_username?: string;
   balance_notes?: string;
   notes?: string;
+  status: 'active' | 'archived';
   userId?: string;
 }
 

@@ -8,16 +8,15 @@ import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
 import { GroupDetailSheet } from './GroupDetailSheet';
 import { BalanceAuditSheet } from './BalanceAuditSheet';
-import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import { useMemo } from 'react';
-
+import { getScheduleSummary } from '../utils/formatting';
+import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import { useSearchParams } from '../hooks/useSearchParams';
 
 export const GroupsView: React.FC = () => {
     const { t, i18n } = useTranslation();
-    const { getParam } = useSearchParams();
+    const { getParam, setParam } = useSearchParams();
     const [showArchived, setShowArchived] = useState(false);
-    const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudentGlobal = convexUser?.role === 'student';
     const isAdmin = convexUser?.role === 'admin';
@@ -67,6 +66,9 @@ export const GroupsView: React.FC = () => {
 
     const archivedGroups = groups.filter(g => g.status === 'archived');
 
+    const groupIdParam = getParam('groupId');
+    const selectedGroup = groups.find(g => String(g.id) === groupIdParam) || null;
+
     const isOwner = selectedGroup?.userId === String(currentTgId);
     const shouldShowAudit = selectedGroup && !isAdmin && (isStudentGlobal || !isOwner);
 
@@ -96,36 +98,6 @@ export const GroupsView: React.FC = () => {
 
 
 
-    const getScheduleSummary = (group: Group) => {
-        const groupSchedules = schedules.filter(s => String(s.group_id) === String(group.id) && s.is_active);
-        if (groupSchedules.length === 0) return t('no_schedule');
-
-        const lang = i18n.language.toUpperCase();
-        const locale = lang === 'KA' ? 'ka-GE' : lang === 'RU' ? 'ru-RU' : 'en-US';
-
-        // Helper to format day of week
-        const getDayName = (day: number) => {
-            const date = new Date(2024, 0, day + 7); // Jan 7, 2024 was a Sunday
-            return date.toLocaleDateString(locale, { weekday: 'short' });
-        };
-
-        // Helper to format time (hide :00)
-        const formatT = (h: number, m: number) => {
-            return m === 0 ? `${h}` : `${h}:${m.toString().padStart(2, '0')}`;
-        };
-
-        const formatRange = (timeStr: string, durationMinutes: number) => {
-            const [h, m] = timeStr.split(':').map(Number);
-            const start = new Date();
-            start.setHours(h, m, 0, 0);
-            const end = new Date(start.getTime() + durationMinutes * 60000);
-            return `${formatT(h, m)}–${formatT(end.getHours(), end.getMinutes())}`;
-        };
-
-        return groupSchedules
-            .map(s => `${getDayName(s.day_of_week)} ${formatRange(s.time, s.duration_minutes || group.default_duration_minutes)}`)
-            .join(', ');
-    };
 
 
 
@@ -174,7 +146,7 @@ export const GroupsView: React.FC = () => {
                             {myGroups.map(group => (
                                 <button
                                     key={group.id}
-                                    onClick={() => setSelectedGroup(group)}
+                                    onClick={() => setParam('groupId', String(group.id))}
                                     className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
                                 >
                                     <div className="flex-1 min-w-0">
@@ -186,7 +158,7 @@ export const GroupsView: React.FC = () => {
                                             <h3 className="text-xl font-bold dark:text-white leading-none truncate">{group.name}</h3>
                                         </div>
                                         <p className="text-sm text-ios-gray pl-7 truncate">
-                                            {getScheduleSummary(group)}
+                                            {getScheduleSummary(group, schedules, t, i18n)}
                                         </p>
                                     </div>
                                     <ChevronRight className="w-5 h-5 text-ios-gray flex-shrink-0 ml-2" />
@@ -263,7 +235,7 @@ export const GroupsView: React.FC = () => {
                                         return (
                                             <button
                                                 key={group.id}
-                                                onClick={() => setSelectedGroup(group)}
+                                                onClick={() => setParam('groupId', String(group.id))}
                                                 className="w-full flex items-center justify-between p-4 ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform text-left"
                                             >
                                                 <div className="flex-1 min-w-0">
@@ -327,7 +299,7 @@ export const GroupsView: React.FC = () => {
                             {archivedGroups.map(group => (
                                 <button
                                     key={group.id}
-                                    onClick={() => setSelectedGroup(group)}
+                                    onClick={() => setParam('groupId', String(group.id))}
                                     className="w-full flex items-center gap-3 p-4 ios-card dark:bg-zinc-900/50 border border-gray-100/50 dark:border-zinc-800/50 rounded-2xl text-left opacity-60"
                                 >
                                     <div
@@ -353,7 +325,7 @@ export const GroupsView: React.FC = () => {
                 shouldShowAudit && auditData ? (
                     <BalanceAuditSheet
                         isOpen={!!selectedGroup}
-                        onClose={() => setSelectedGroup(null)}
+                        onClose={() => setParam('groupId', null)}
                         auditResult={auditData.result}
                         group={selectedGroup}
                         subscriptions={auditData.studentSubscriptions}
@@ -361,7 +333,7 @@ export const GroupsView: React.FC = () => {
                 ) : (
                     <GroupDetailSheet
                         group={selectedGroup}
-                        onClose={() => setSelectedGroup(null)}
+                        onClose={() => setParam('groupId', null)}
                     />
                 )
             )}
