@@ -536,7 +536,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-            <div className="relative w-full max-w-md bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl p-6 space-y-6 min-h-[400px] max-h-[85vh] overflow-y-auto">
+            <div className="relative w-full max-w-md bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl p-6 pb-12 space-y-6 min-h-[400px] max-h-[85vh] overflow-y-auto">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         {(showingSubpage || showingCalendarForm) && (

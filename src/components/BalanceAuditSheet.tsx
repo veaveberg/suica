@@ -172,7 +172,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                    <div className="flex-1 overflow-y-auto p-4 pb-12 space-y-6">
                         {/* Balance Breakdown */}
                         <div className="bg-ios-card dark:bg-zinc-900 rounded-2xl p-4 shadow-sm border border-black/[0.02] dark:border-white/[0.02]">
                             <div className="flex items-center justify-between text-sm">

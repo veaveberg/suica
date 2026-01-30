@@ -204,7 +204,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         <h2 className="font-bold text-lg dark:text-white truncate max-w-[200px]">
                             {isArchived ? t('archived_student') || 'Archived' : (student.name || t('add_student'))}
                         </h2>
-                        {!readOnly && !isArchived && (
+                        {!readOnly && (
                             <button
                                 onClick={handleSave}
                                 disabled={!editName.trim()}
@@ -216,7 +216,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         {isArchived && <div className="w-10" />}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-4 pb-12 space-y-4">
                         {/* Name & Telegram */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
@@ -226,7 +226,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     value={editName}
                                     autoFocus={!student.name}
                                     onChange={(e) => setEditName(e.target.value)}
-                                    readOnly={readOnly || isArchived}
+                                    readOnly={readOnly}
                                     className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                     placeholder={t('student_name')}
                                 />
@@ -240,7 +240,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             type="text"
                                             value={editTelegram}
                                             onChange={(e) => setEditTelegram(e.target.value)}
-                                            readOnly={readOnly || isArchived}
+                                            readOnly={readOnly}
                                             className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                             placeholder="username"
                                         />
@@ -278,7 +278,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         type="text"
                                         value={editInstagram}
                                         onChange={(e) => setEditInstagram(e.target.value)}
-                                        readOnly={readOnly || isArchived}
+                                        readOnly={readOnly}
                                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                         placeholder="username"
                                     />
@@ -304,7 +304,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <textarea
                                     value={editNotes}
                                     onChange={(e) => setEditNotes(e.target.value)}
-                                    readOnly={readOnly || isArchived}
+                                    readOnly={readOnly}
                                     className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none disabled:opacity-50"
                                     placeholder={t('note') || 'Note'}
                                     rows={2}
@@ -330,7 +330,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                             style={{ backgroundColor: group.color }}
                                         />
                                         <span className="text-sm font-medium dark:text-white">{group.name}</span>
-                                        {!readOnly && !isArchived && (
+                                        {!readOnly && (
                                             <button
                                                 onClick={async () => {
                                                     await removeStudentFromGroup(student.id!, group.id!);
@@ -345,7 +345,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 ))}
 
                                 {/* Add group button */}
-                                {!readOnly && !isArchived && !addingToGroup && (
+                                {!readOnly && !addingToGroup && (
                                     <button
                                         onClick={() => setAddingToGroup(true)}
                                         className="flex items-center gap-1 px-3 py-2 bg-ios-background dark:bg-zinc-800 rounded-xl text-ios-blue active:scale-95 transition-transform"

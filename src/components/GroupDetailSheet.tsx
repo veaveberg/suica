@@ -189,7 +189,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                     {(isArchived || isStudent) && <div className="w-12" />}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 pb-12 space-y-6">
                     {/* Name */}
                     <div>
                         <label className="text-sm text-ios-gray uppercase tracking-wider">{t('name')}</label>
@@ -506,6 +506,18 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                             </div>
                         </div>
                     )}
+
+                    {!isArchived && !isStudent && (
+                        <div className="pt-8 mt-auto">
+                            <button
+                                onClick={handleArchive}
+                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ios-gray/10 text-ios-gray font-semibold active:opacity-60 transition-opacity"
+                            >
+                                <Archive className="w-5 h-5" />
+                                {t('archive_group')}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <StudentSelector
@@ -515,20 +527,10 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                     allStudents={allStudents}
                     initialSelectedIds={memberIds}
                 />     {/* Footer Actions Inline */}
-                <div className="pt-4 border-t border-gray-100 dark:border-zinc-800/50">
-                    {!isArchived && !isStudent && (
-                        <button
-                            onClick={handleArchive}
-                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ios-gray/10 text-ios-gray font-semibold active:opacity-60 transition-opacity"
-                        >
-                            <Archive className="w-5 h-5" />
-                            {t('archive_group')}
-                        </button>
-                    )}
-                </div>
+
                 {/* Sticky Footer for archived actions only */}
                 {isArchived && (
-                    <div className="shrink-0 p-4 border-t border-gray-200 dark:border-zinc-800 bg-ios-card dark:bg-zinc-900">
+                    <div className="shrink-0 p-4 pb-8 border-t border-gray-200 dark:border-zinc-800 bg-ios-card dark:bg-zinc-900">
                         <div className="space-y-2">
                             <button
                                 onClick={handleRestore}

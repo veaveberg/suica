@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ban, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle, Plus, Settings, Calendar, Clock, CalendarClock } from 'lucide-react';
+import { X, Ban, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle, Plus, Settings, Calendar, Clock, CalendarClock, ChevronDown, ChevronRight, Archive } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
@@ -48,6 +48,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
     const skipTimerRef = useRef<any>(null);
     const isLongPressRef = useRef(false);
     const [showStudentSelector, setShowStudentSelector] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
 
     // Get group info
     const group = lesson ? groups.find(g => String(g.id) === String(lesson.group_id)) : null;
@@ -161,8 +162,13 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
     if (!lesson) return null;
 
 
+
     // Count students marked as present
     const selected = Object.entries(attendanceData).filter(([_, status]) => status === 'present');
+
+    const activeStudents = groupStudents.filter(s => s.status !== 'archived');
+    const archivedStudents = groupStudents.filter(s => s.status === 'archived');
+
 
     const handleSave = async () => {
         try {
@@ -251,6 +257,200 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
         await refreshLessons();
     };
 
+
+    const StudentRow = ({ student }: { student: Student }) => {
+        const status = attendanceData[student.id!] || 'not_marked';
+
+        const setStatus = (newStatus: AttendanceStatus | 'not_marked', silent = false) => {
+            setAttendanceData(prev => ({
+                ...prev,
+                [student.id!]: newStatus
+            }));
+            if (!isStudent && !silent && navigator.vibrate) navigator.vibrate(10);
+        };
+
+        const handleSkipPointerDown = () => {
+            isLongPressRef.current = false;
+            skipTimerRef.current = setTimeout(() => {
+                isLongPressRef.current = true;
+                const nextSkipStatus = status === 'absence_valid' ? 'absence_invalid' : 'absence_valid';
+                setStatus(nextSkipStatus, true);
+                if (navigator.vibrate) navigator.vibrate(50);
+            }, 500);
+        };
+
+        const handleSkipPointerUp = () => {
+            if (skipTimerRef.current) {
+                clearTimeout(skipTimerRef.current);
+                skipTimerRef.current = null;
+            }
+        };
+
+        const handleSkipClick = () => {
+            if (isStudent || isLongPressRef.current) return;
+            if (status === 'absence_invalid' || status === 'absence_valid') {
+                setStatus('not_marked');
+            } else {
+                setStatus('absence_invalid');
+            }
+        };
+
+        const handlePresentClick = () => {
+            if (isStudent || status === 'present') {
+                if (!isStudent) setStatus('not_marked');
+            } else {
+                setStatus('present');
+            }
+        };
+
+        return (
+            <div
+                key={student.id}
+                className="flex items-center justify-between gap-3 p-1.5 pl-4 rounded-2xl bg-ios-background dark:bg-zinc-800"
+            >
+                <div className="flex flex-col min-w-0 pr-2 py-0.5">
+                    <button
+                        onClick={() => setParam('studentId', String(student.id))}
+                        className="font-medium dark:text-gray-200 truncate hover:text-ios-blue transition-colors text-left"
+                    >
+                        {student.name}
+                    </button>
+                    <div className="flex flex-wrap items-start gap-2 mt-1">
+                        {(() => {
+                            const studentInfo = studentStatusMap[String(student.id)] || { hasActivePass: true, isUncoveredPresent: false, isUncoveredSkip: false };
+                            const localStatus = attendanceData[student.id!];
+                            const isMarked = localStatus && localStatus !== 'not_marked';
+
+                            // Get revenue info from Query
+                            const revInfo = revenueStats?.[String(student.id)];
+
+                            if (!isMarked && !studentInfo.hasActivePass) {
+                                return (
+                                    <span className="text-[10px] text-ios-gray leading-[1.1] py-0.5 block">
+                                        {t('no_pass')}
+                                    </span>
+                                );
+                            }
+
+                            const record = allAttendance.find(a =>
+                                String(a.lesson_id) === String(lesson?.id) &&
+                                String(a.student_id) === String(student.id)
+                            );
+
+                            const showWarning = isMarked && (
+                                (localStatus === 'present' && studentInfo.isUncoveredPresent) ||
+                                (localStatus === 'absence_invalid' && studentInfo.isUncoveredSkip) ||
+                                (record?.is_uncovered)
+                            );
+
+                            if (!isMarked) {
+                                return null;
+                            }
+
+                            return (
+                                <div className="flex items-start gap-1.5 min-w-0">
+                                    {showWarning && (
+                                        <div className={cn(
+                                            "flex gap-1 bg-ios-orange/10 px-1.5 -ml-1.5 py-0.5 rounded-md min-w-0",
+                                            localStatus === 'present' ? "items-center" : "items-start"
+                                        )}>
+                                            <AlertTriangle className={cn("w-3 h-3 text-ios-orange flex-shrink-0", localStatus === 'present' ? "" : "mt-0.5")} />
+                                            <span className="text-[10px] text-ios-orange font-medium leading-[1.1]">
+                                                {localStatus === 'present' ? t('no_pass_short') : t('no_pass')}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {(() => {
+                                        // 1. Start with values from local virtual audit (most up-to-date with current UI state)
+                                        let amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
+                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined);
+
+                                        // 2. If local audit doesn't have a value, check the record from DB (historical)
+                                        // BUT only if it's not explicitly uncovered according to our current logic
+                                        if (amount === undefined && !showWarning) {
+                                            amount = record?.payment_amount;
+                                        }
+
+                                        // 3. Override with live revenue calculation from Convex if available and marked
+                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) {
+                                            // Only override if we actually have a pass covering it according to revInfo
+                                            // (or if we trust revInfo's judgment on 0-cost uncovered)
+                                            if (revInfo.cost > 0 || studentInfo.hasActivePass) {
+                                                amount = revInfo.cost;
+                                            } else if (showWarning) {
+                                                amount = 0; // Explicitly 0 if uncovered
+                                            }
+                                        }
+
+                                        if (amount !== undefined && amount > 0) {
+                                            return (
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-[10px] font-bold text-ios-gray leading-none flex-shrink-0">
+                                                        {formatCurrency(amount)} ₾
+                                                    </span>
+                                                    {revInfo && studentInfo.hasActivePass && (
+                                                        <span className="text-[10px] font-normal text-ios-gray leading-none">
+                                                            {revInfo.equation}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+
+                {/* Attendance Controls */}
+                <div className="flex shrink-0">
+                    {/* Skip Button */}
+                    <button
+                        onPointerDown={handleSkipPointerDown}
+                        onPointerUp={handleSkipPointerUp}
+                        onPointerLeave={handleSkipPointerUp}
+                        onClick={handleSkipClick}
+                        className={`p-3 rounded-l-xl flex items-center justify-center transition-all select-none ${(status === 'absence_invalid' || status === 'absence_valid')
+                            ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                            : ''
+                            }`}
+                    >
+                        {status === 'absence_invalid' ? (
+                            <div className="w-8 h-8 rounded-full bg-ios-red flex items-center justify-center">
+                                <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
+                            </div>
+                        ) : status === 'absence_valid' ? (
+                            <div className="w-8 h-8 rounded-full bg-ios-blue flex items-center justify-center">
+                                <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
+                            </div>
+                        ) : (
+                            <XCircle className="w-8 h-8 text-gray-300 dark:text-zinc-600" />
+                        )}
+                    </button>
+
+                    {/* Present Button */}
+                    <button
+                        onClick={handlePresentClick}
+                        className={`p-3 rounded-r-xl flex items-center justify-center transition-all select-none ${status === 'present'
+                            ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                            : ''
+                            }`}
+                    >
+                        {status === 'present' ? (
+                            <div className="w-8 h-8 rounded-full bg-ios-green flex items-center justify-center">
+                                <Check className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
+                            </div>
+                        ) : (
+                            <CheckCircle2 className="w-8 h-8 text-gray-300 dark:text-zinc-600" />
+                        )}
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -279,7 +479,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                     )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 pb-12 space-y-6">
 
                     {/* Date/Time Info & Action Buttons */}
                     <div className="space-y-4 px-1">
@@ -457,204 +657,44 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                             </div>
 
                             <div className="space-y-2">
-                                {groupStudents.length === 0 ? (
+                                {activeStudents.length === 0 && archivedStudents.length === 0 ? (
                                     <p className="text-center py-4 text-ios-gray">
                                         {t('no_members') || 'No students in this group'}
                                     </p>
                                 ) : (
-                                    groupStudents.map((student: Student) => {
-                                        const status = attendanceData[student.id!] || 'not_marked';
+                                    <>
+                                        {activeStudents.map((student: Student) => (
+                                            <StudentRow key={student.id} student={student} />
+                                        ))}
 
-                                        const setStatus = (newStatus: AttendanceStatus | 'not_marked', silent = false) => {
-                                            setAttendanceData(prev => ({
-                                                ...prev,
-                                                [student.id!]: newStatus
-                                            }));
-                                            if (!isStudent && !silent && navigator.vibrate) navigator.vibrate(10);
-                                        };
-
-                                        const handleSkipPointerDown = () => {
-                                            isLongPressRef.current = false;
-                                            skipTimerRef.current = setTimeout(() => {
-                                                isLongPressRef.current = true;
-                                                const nextSkipStatus = status === 'absence_valid' ? 'absence_invalid' : 'absence_valid';
-                                                setStatus(nextSkipStatus, true);
-                                                if (navigator.vibrate) navigator.vibrate(50);
-                                            }, 500);
-                                        };
-
-                                        const handleSkipPointerUp = () => {
-                                            if (skipTimerRef.current) {
-                                                clearTimeout(skipTimerRef.current);
-                                                skipTimerRef.current = null;
-                                            }
-                                        };
-
-                                        const handleSkipClick = () => {
-                                            if (isStudent || isLongPressRef.current) return;
-                                            if (status === 'absence_invalid' || status === 'absence_valid') {
-                                                setStatus('not_marked');
-                                            } else {
-                                                setStatus('absence_invalid');
-                                            }
-                                        };
-
-                                        const handlePresentClick = () => {
-                                            if (isStudent || status === 'present') {
-                                                if (!isStudent) setStatus('not_marked');
-                                            } else {
-                                                setStatus('present');
-                                            }
-                                        };
-
-                                        return (
-                                            <div
-                                                key={student.id}
-                                                className="flex items-center justify-between gap-3 p-1.5 pl-4 rounded-2xl bg-ios-background dark:bg-zinc-800"
-                                            >
-                                                <div className="flex flex-col min-w-0 pr-2 py-0.5">
-                                                    <button
-                                                        onClick={() => setParam('studentId', String(student.id))}
-                                                        className="font-medium dark:text-gray-200 truncate hover:text-ios-blue transition-colors text-left"
-                                                    >
-                                                        {student.name}
-                                                    </button>
-                                                    <div className="flex flex-wrap items-start gap-2 mt-1">
-                                                        {(() => {
-                                                            const studentInfo = studentStatusMap[String(student.id)] || { hasActivePass: true, isUncoveredPresent: false, isUncoveredSkip: false };
-                                                            const localStatus = attendanceData[student.id!];
-                                                            const isMarked = localStatus && localStatus !== 'not_marked';
-
-                                                            // Get revenue info from Query
-                                                            const revInfo = revenueStats?.[String(student.id)];
-
-                                                            if (!isMarked && !studentInfo.hasActivePass) {
-                                                                return (
-                                                                    <span className="text-[10px] text-ios-gray leading-[1.1] py-0.5 block">
-                                                                        {t('no_pass')}
-                                                                    </span>
-                                                                );
-                                                            }
-
-                                                            const record = allAttendance.find(a =>
-                                                                String(a.lesson_id) === String(lesson?.id) &&
-                                                                String(a.student_id) === String(student.id)
-                                                            );
-
-                                                            const showWarning = isMarked && (
-                                                                (localStatus === 'present' && studentInfo.isUncoveredPresent) ||
-                                                                (localStatus === 'absence_invalid' && studentInfo.isUncoveredSkip) ||
-                                                                (record?.is_uncovered)
-                                                            );
-
-                                                            if (!isMarked) {
-                                                                return null;
-                                                            }
-
-                                                            return (
-                                                                <div className="flex items-start gap-1.5 min-w-0">
-                                                                    {showWarning && (
-                                                                        <div className={cn(
-                                                                            "flex gap-1 bg-ios-orange/10 px-1.5 -ml-1.5 py-0.5 rounded-md min-w-0",
-                                                                            localStatus === 'present' ? "items-center" : "items-start"
-                                                                        )}>
-                                                                            <AlertTriangle className={cn("w-3 h-3 text-ios-orange flex-shrink-0", localStatus === 'present' ? "" : "mt-0.5")} />
-                                                                            <span className="text-[10px] text-ios-orange font-medium leading-[1.1]">
-                                                                                {localStatus === 'present' ? t('no_pass_short') : t('no_pass')}
-                                                                            </span>
-                                                                        </div>
-                                                                    )}
-                                                                    {(() => {
-                                                                        // 1. Start with values from local virtual audit (most up-to-date with current UI state)
-                                                                        let amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
-                                                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined);
-
-                                                                        // 2. If local audit doesn't have a value, check the record from DB (historical)
-                                                                        // BUT only if it's not explicitly uncovered according to our current logic
-                                                                        if (amount === undefined && !showWarning) {
-                                                                            amount = record?.payment_amount;
-                                                                        }
-
-                                                                        // 3. Override with live revenue calculation from Convex if available and marked
-                                                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) {
-                                                                            // Only override if we actually have a pass covering it according to revInfo
-                                                                            // (or if we trust revInfo's judgment on 0-cost uncovered)
-                                                                            if (revInfo.cost > 0 || studentInfo.hasActivePass) {
-                                                                                amount = revInfo.cost;
-                                                                            } else if (showWarning) {
-                                                                                amount = 0; // Explicitly 0 if uncovered
-                                                                            }
-                                                                        }
-
-                                                                        if (amount !== undefined && amount > 0) {
-                                                                            return (
-                                                                                <div className="flex items-center gap-2 mt-1">
-                                                                                    <span className="text-[10px] font-bold text-ios-gray leading-none flex-shrink-0">
-                                                                                        {formatCurrency(amount)} ₾
-                                                                                    </span>
-                                                                                    {revInfo && studentInfo.hasActivePass && (
-                                                                                        <span className="text-[10px] font-normal text-ios-gray leading-none">
-                                                                                            {revInfo.equation}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                        return null;
-                                                                    })()}
-                                                                </div>
-                                                            );
-                                                        })()}
+                                        {archivedStudents.length > 0 && (
+                                            <div className="pt-2">
+                                                <button
+                                                    onClick={() => setShowArchived(!showArchived)}
+                                                    className="flex items-center gap-2 py-2 text-ios-gray px-1 active:opacity-60 transition-opacity"
+                                                >
+                                                    {showArchived ? (
+                                                        <ChevronDown className="w-4 h-4" />
+                                                    ) : (
+                                                        <ChevronRight className="w-4 h-4" />
+                                                    )}
+                                                    <Archive className="w-4 h-4" />
+                                                    <span className="text-sm font-medium">
+                                                        {t('archived')} ({archivedStudents.length})
+                                                    </span>
+                                                </button>
+                                                {showArchived && (
+                                                    <div className="space-y-2 mt-2">
+                                                        {archivedStudents.map((student: Student) => (
+                                                            <StudentRow key={student.id} student={student} />
+                                                        ))}
                                                     </div>
-                                                </div>
-
-                                                {/* Attendance Controls */}
-                                                <div className="flex shrink-0">
-                                                    {/* Skip Button */}
-                                                    <button
-                                                        onPointerDown={handleSkipPointerDown}
-                                                        onPointerUp={handleSkipPointerUp}
-                                                        onPointerLeave={handleSkipPointerUp}
-                                                        onClick={handleSkipClick}
-                                                        className={`p-3 rounded-l-xl flex items-center justify-center transition-all select-none ${(status === 'absence_invalid' || status === 'absence_valid')
-                                                            ? 'bg-white dark:bg-zinc-700 shadow-sm'
-                                                            : ''
-                                                            }`}
-                                                    >
-                                                        {status === 'absence_invalid' ? (
-                                                            <div className="w-8 h-8 rounded-full bg-ios-red flex items-center justify-center">
-                                                                <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
-                                                            </div>
-                                                        ) : status === 'absence_valid' ? (
-                                                            <div className="w-8 h-8 rounded-full bg-ios-blue flex items-center justify-center">
-                                                                <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
-                                                            </div>
-                                                        ) : (
-                                                            <XCircle className="w-8 h-8 text-gray-300 dark:text-zinc-600" />
-                                                        )}
-                                                    </button>
-
-                                                    {/* Present Button */}
-                                                    <button
-                                                        onClick={handlePresentClick}
-                                                        className={`p-3 rounded-r-xl flex items-center justify-center transition-all select-none ${status === 'present'
-                                                            ? 'bg-white dark:bg-zinc-700 shadow-sm'
-                                                            : ''
-                                                            }`}
-                                                    >
-                                                        {status === 'present' ? (
-                                                            <div className="w-8 h-8 rounded-full bg-ios-green flex items-center justify-center">
-                                                                <Check className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
-                                                            </div>
-                                                        ) : (
-                                                            <CheckCircle2 className="w-8 h-8 text-gray-300 dark:text-zinc-600" />
-                                                        )}
-                                                    </button>
-                                                </div>
+                                                )}
                                             </div>
-                                        );
-                                    })
-                                )}
+                                        )}
+                                    </>
+                                )
+                                }
                             </div>
 
                             {/* Status Segmented Control (End of students section) */}

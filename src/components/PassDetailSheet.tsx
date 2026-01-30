@@ -120,7 +120,7 @@ export const PassDetailSheet: React.FC<PassDetailSheetProps> = ({ isOpen, onClos
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 pb-12 space-y-6">
                     {/* Main Properties Section */}
                     <div className="bg-ios-card dark:bg-zinc-900 rounded-2xl overflow-hidden divide-y divide-gray-100 dark:divide-zinc-800">
                         <div className="flex items-center px-4 py-3 gap-3">
