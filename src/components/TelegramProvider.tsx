@@ -150,6 +150,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                         convexUser: { _id: storedUserId, role: getAuthRole()! }
                     });
                     if (!authToken) {
+                        sessionStorage.setItem('suica_security_reauth_notice', '1');
                         clearAuthUser();
                         setUserData({});
                     }
