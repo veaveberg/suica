@@ -4,9 +4,9 @@ import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("lessons").collect();
@@ -81,6 +81,7 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         group_id: v.id("groups"),
         date: v.string(),
         time: v.string(),
@@ -92,7 +93,7 @@ export const create = mutation({
         info_for_students: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("lessons", {
             group_id: args.group_id,
@@ -112,6 +113,7 @@ export const create = mutation({
 export const update = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("lessons"),
         updates: v.object({
             date: v.optional(v.string()),
@@ -126,7 +128,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.id);
 
         if (!lesson) throw new Error("Lesson not found");
@@ -141,10 +143,11 @@ export const update = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("lessons"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.id);
 
         if (!lesson) throw new Error("Lesson not found");
@@ -160,6 +163,7 @@ export const remove = mutation({
 export const bulkCreate = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         lessons: v.array(v.object({
             group_id: v.id("groups"),
             date: v.string(),
@@ -173,7 +177,7 @@ export const bulkCreate = mutation({
         }))
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const lesson of args.lessons) {
             await ctx.db.insert("lessons", {
@@ -190,11 +194,12 @@ export const bulkCreate = mutation({
 export const generateMore = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         groupId: v.id("groups"),
         count: v.number(),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const group = await ctx.db.get(args.groupId);
         if (!group) return;
 
@@ -292,11 +297,12 @@ export const generateMore = mutation({
 export const syncFromSchedule = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         today: v.string(), // YYYY-MM-DD
         groupId: v.optional(v.id("groups")),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         const groupsToSync = args.groupId
             ? [await ctx.db.get(args.groupId)]

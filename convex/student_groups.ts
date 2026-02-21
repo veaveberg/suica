@@ -3,9 +3,9 @@ import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("student_groups").collect();
@@ -54,11 +54,12 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         student_id: v.id("students"),
         group_id: v.id("groups"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         // check if exists
         const existing = await ctx.db
@@ -79,10 +80,11 @@ export const create = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("student_groups"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const sg = await ctx.db.get(args.id);
 
         if (!sg) throw new Error("Association not found");

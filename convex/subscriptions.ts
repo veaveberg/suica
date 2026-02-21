@@ -5,9 +5,9 @@ import { internal } from "./_generated/api";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("subscriptions").collect();
@@ -56,6 +56,7 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         user_id: v.id("students"),
         group_id: v.id("groups"),
         tariff_id: v.optional(v.union(v.id("tariffs"), v.id("passes"))),
@@ -69,7 +70,7 @@ export const create = mutation({
         status: v.union(v.literal("active"), v.literal("archived")),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         const subId = await ctx.db.insert("subscriptions", {
             user_id: args.user_id,
@@ -99,6 +100,7 @@ export const create = mutation({
 export const update = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("subscriptions"),
         updates: v.object({
             lessons_total: v.optional(v.number()),
@@ -112,7 +114,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const sub = await ctx.db.get(args.id);
 
         if (!sub) throw new Error("Subscription not found");
@@ -133,10 +135,11 @@ export const update = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("subscriptions"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const sub = await ctx.db.get(args.id);
 
         if (!sub) throw new Error("Subscription not found");

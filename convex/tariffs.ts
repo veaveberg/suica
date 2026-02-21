@@ -3,9 +3,9 @@ import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("tariffs").collect();
@@ -25,6 +25,7 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         name: v.string(),
         type: v.string(),
         price: v.number(),
@@ -33,7 +34,7 @@ export const create = mutation({
         duration_days: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("tariffs", {
             name: args.name,
@@ -50,6 +51,7 @@ export const create = mutation({
 export const update = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("tariffs"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -61,7 +63,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const tariff = await ctx.db.get(args.id);
 
         if (!tariff) throw new Error("Tariff not found");
@@ -76,10 +78,11 @@ export const update = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("tariffs"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const tariff = await ctx.db.get(args.id);
 
         if (!tariff) throw new Error("Tariff not found");

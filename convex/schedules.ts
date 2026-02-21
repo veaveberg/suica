@@ -3,9 +3,9 @@ import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("schedules").collect();
@@ -79,6 +79,7 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         group_id: v.id("groups"),
         day_of_week: v.number(),
         time: v.string(),
@@ -88,7 +89,7 @@ export const create = mutation({
         is_active: v.boolean(),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("schedules", {
             group_id: args.group_id,
@@ -106,6 +107,7 @@ export const create = mutation({
 export const update = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("schedules"),
         updates: v.object({
             day_of_week: v.optional(v.number()),
@@ -117,7 +119,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const schedule = await ctx.db.get(args.id);
 
         if (!schedule) throw new Error("Schedule not found");
@@ -132,10 +134,11 @@ export const update = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("schedules"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const schedule = await ctx.db.get(args.id);
 
         if (!schedule) throw new Error("Schedule not found");

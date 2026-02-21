@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { convex } from './convex-client';
-import { getAuthUserId } from './auth-store';
+import { getAuthToken, getAuthUserId } from './auth-store';
 import { useTelegram } from './components/TelegramProvider';
 import type { Group, Student, StudentGroup, Subscription, Lesson, GroupSchedule, Attendance, Tariff, Pass, PassGroup, ExternalCalendar } from './types';
 import { GROUP_COLORS } from './constants/colors';
@@ -10,14 +10,24 @@ import type { Id } from '../convex/_generated/dataModel';
 
 export { GROUP_COLORS };
 
+function requireAuth() {
+    const userId = getAuthUserId();
+    const authToken = getAuthToken();
+    if (!userId || !authToken) {
+        throw new Error("Unauthenticated");
+    }
+    return { userId: userId as Id<"users">, authToken };
+}
+
 // ============================================
 // DATA HOOKS
 // ============================================
 
 function useDataQuery<T>(query: any, userId?: string, skip: boolean = false) {
-    const data = useQuery(query, (userId && !skip) ? { userId: userId as Id<"users"> } : "skip");
+    const authToken = getAuthToken();
+    const data = useQuery(query, (userId && authToken && !skip) ? { userId: userId as Id<"users">, authToken } : "skip");
     const mappedData = (data || []).map((item: any) => ({ ...item, id: item._id }));
-    const loading = (userId && !skip) ? data === undefined : false;
+    const loading = (userId && authToken && !skip) ? data === undefined : false;
 
     // Memoize refresh to prevent unnecessary effect triggers in consumers
     const refresh = React.useCallback(async () => { /* Convex handles updates automatically */ }, []);
@@ -86,9 +96,10 @@ export function useExternalCalendars() {
 // ============================================
 
 export async function createGroup(name: string, color?: string): Promise<string> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     const id = await convex.mutation(api.groups.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         name,
         color: color || GROUP_COLORS[0], // fallback
         default_duration_minutes: 60,
@@ -98,7 +109,7 @@ export async function createGroup(name: string, color?: string): Promise<string>
 }
 
 export async function updateGroup(groupId: string, updates: Partial<Group>): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     // Filter updates
     const allowedUpdates = {
         name: updates.name,
@@ -108,34 +119,38 @@ export async function updateGroup(groupId: string, updates: Partial<Group>): Pro
     };
 
     await convex.mutation(api.groups.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: groupId as Id<"groups">,
         updates: allowedUpdates
     });
 }
 
 export async function archiveGroup(groupId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.groups.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: groupId as Id<"groups">,
         updates: { status: 'archived' }
     });
 }
 
 export async function restoreGroup(groupId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.groups.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: groupId as Id<"groups">,
         updates: { status: 'active' }
     });
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.groups.remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: groupId as Id<"groups">
     });
 }
@@ -145,9 +160,10 @@ export async function deleteGroup(groupId: string): Promise<void> {
 // ============================================
 
 export async function addScheduleSlot(groupId: string, dayOfWeek: number, time: string, durationMinutes?: number, frequencyWeeks?: number, weekOffset?: number): Promise<string> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     const id = await convex.mutation(api.schedules.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         group_id: groupId as Id<"groups">,
         day_of_week: dayOfWeek,
         time,
@@ -160,17 +176,19 @@ export async function addScheduleSlot(groupId: string, dayOfWeek: number, time: 
 }
 
 export async function deleteScheduleSlot(scheduleId: number | string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.schedules.remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: scheduleId as Id<"schedules">
     });
 }
 
 export async function updateScheduleSlot(scheduleId: number | string, updates: Partial<GroupSchedule>): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.schedules.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: scheduleId as Id<"schedules">,
         updates: {
             day_of_week: updates.day_of_week,
@@ -185,21 +203,23 @@ export async function updateScheduleSlot(scheduleId: number | string, updates: P
 // ============================================
 
 export async function syncLessonsFromSchedule(targetGroupId?: string): Promise<void> {
-    const userId = getAuthUserId() as Id<"users">;
+    const { userId, authToken } = requireAuth();
     // Get today's local date in YYYY-MM-DD format
     const today = new Date().toLocaleDateString('en-CA');
 
     await convex.mutation(api.lessons.syncFromSchedule, {
         userId,
+        authToken,
         today,
         groupId: targetGroupId as Id<"groups">
     });
 }
 
 export async function generateFutureLessons(groupId: string, count: number = 4): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.lessons.generateMore, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         groupId: groupId as Id<"groups">,
         count: count
     });
@@ -216,9 +236,10 @@ export async function bulkCreateLessons(lessons: Array<{
     total_amount?: number;
     info_for_students?: string;
 }>): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.lessons.bulkCreate, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         lessons: lessons.map(lesson => ({
             ...lesson,
             group_id: lesson.group_id as Id<"groups">,
@@ -228,27 +249,30 @@ export async function bulkCreateLessons(lessons: Array<{
 }
 
 export async function cancelLesson(lessonId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.lessons.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: lessonId as Id<"lessons">,
         updates: { status: 'cancelled' }
     });
 }
 
 export async function uncancelLesson(lessonId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.lessons.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: lessonId as Id<"lessons">,
         updates: { status: 'upcoming' }
     });
 }
 
 export async function deleteLesson(lessonId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.lessons.remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: lessonId as Id<"lessons">
     });
 }
@@ -263,34 +287,37 @@ export async function deleteLessons(lessonIds: string[]): Promise<void> {
 // ============================================
 
 export async function addStudentToGroup(studentId: string, groupId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.student_groups.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         student_id: studentId as Id<"students">,
         group_id: groupId as Id<"groups">
     });
 }
 
 export async function removeStudentFromGroup(studentId: string, groupId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     // We need the ID of the association.
     // Query it first? 
     // Or add a mutation "removeByLink".
     // For now, we query client side then remove.
-    const all = await convex.query(api.student_groups.get, { userId: userId as Id<"users"> });
+    const all = await convex.query(api.student_groups.get, { userId, authToken });
     const found = all.find(sg => sg.student_id === studentId && sg.group_id === groupId);
     if (found) {
         await convex.mutation(api.student_groups.remove, {
-            userId: userId as Id<"users">,
+            userId,
+        authToken,
             id: found._id
         });
     }
 }
 
 export async function createStudent(data: Partial<Student>): Promise<string> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     const id = await convex.mutation(api.students.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         name: data.name!,
         telegram_username: data.telegram_username,
         instagram_username: data.instagram_username,
@@ -300,9 +327,10 @@ export async function createStudent(data: Partial<Student>): Promise<string> {
 }
 
 export async function updateStudent(id: string, data: Partial<Student>): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.students.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"students">,
         updates: {
             name: data.name,
@@ -315,18 +343,20 @@ export async function updateStudent(id: string, data: Partial<Student>): Promise
 }
 
 export async function archiveStudent(id: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.students.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"students">,
         updates: { status: 'archived' }
     });
 }
 
 export async function restoreStudent(id: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.students.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"students">,
         updates: { status: 'active' }
     });
@@ -337,9 +367,10 @@ export async function restoreStudent(id: string): Promise<void> {
 // ============================================
 
 export async function addSubscription(sub: Omit<Subscription, 'id'>): Promise<string> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     const id = await convex.mutation(api.subscriptions.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         user_id: sub.user_id as Id<"students">,
         group_id: sub.group_id as Id<"groups">,
         tariff_id: sub.tariff_id as any,
@@ -356,9 +387,10 @@ export async function addSubscription(sub: Omit<Subscription, 'id'>): Promise<st
 }
 
 export async function markAttendance(lessonId: string, studentId: string, status: 'present' | 'absence_valid' | 'absence_invalid'): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.attendance.mark, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         lesson_id: lessonId as Id<"lessons">,
         student_id: studentId as Id<"students">,
         status
@@ -371,9 +403,10 @@ export async function markAttendance(lessonId: string, studentId: string, status
 // ============================================
 
 export async function createPass(passData: Partial<Pass>, groupIds: string[]): Promise<string> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     const passId = await convex.mutation(api.passes.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         name: passData.name!,
         price: passData.price!,
         lessons_count: passData.lessons_count!,
@@ -384,7 +417,8 @@ export async function createPass(passData: Partial<Pass>, groupIds: string[]): P
     // Create associations
     for (const groupId of groupIds) {
         await convex.mutation(api.pass_groups.create, {
-            userId: userId as Id<"users">,
+            userId,
+        authToken,
             pass_id: passId,
             group_id: groupId as Id<"groups">
         });
@@ -394,11 +428,12 @@ export async function createPass(passData: Partial<Pass>, groupIds: string[]): P
 }
 
 export async function updatePass(passId: string, passData: Partial<Pass>, groupIds: string[]): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
 
     // Update pass details
     await convex.mutation(api.passes.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: passId as Id<"passes">,
         updates: {
             name: passData.name,
@@ -413,7 +448,7 @@ export async function updatePass(passId: string, passData: Partial<Pass>, groupI
     // First, remove all existing logic is too heavy? No, better diff.
     // Client side provides new list. We need to reconcile.
     // Fetch existing.
-    const all = await convex.query(api.pass_groups.get, { userId: userId as Id<"users"> });
+    const all = await convex.query(api.pass_groups.get, { userId, authToken });
     const existing = all.filter(pg => pg.pass_id === passId);
 
     const existingGroupIds = existing.map(pg => pg.group_id);
@@ -423,7 +458,8 @@ export async function updatePass(passId: string, passData: Partial<Pass>, groupI
 
     for (const groupId of toAdd) {
         await convex.mutation(api.pass_groups.create, {
-            userId: userId as Id<"users">,
+            userId,
+        authToken,
             pass_id: passId as Id<"passes">,
             group_id: groupId as Id<"groups">
         });
@@ -431,24 +467,27 @@ export async function updatePass(passId: string, passData: Partial<Pass>, groupI
 
     for (const pg of toRemove) {
         await convex.mutation(api.pass_groups.remove, {
-            userId: userId as Id<"users">,
+            userId,
+        authToken,
             id: pg._id
         });
     }
 }
 
 export async function deletePass(passId: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.passes.remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: passId as Id<"passes">
     });
 }
 
 export async function addExternalCalendar(name: string, url: string, color: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.calendars.create, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         name,
         url,
         color,
@@ -457,17 +496,19 @@ export async function addExternalCalendar(name: string, url: string, color: stri
 }
 
 export async function deleteExternalCalendar(id: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.calendars.remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"external_calendars">
     });
 }
 
 export async function updateExternalCalendar(id: string, updates: Partial<ExternalCalendar>): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.calendars.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"external_calendars">,
         updates: {
             name: updates.name,
@@ -479,9 +520,10 @@ export async function updateExternalCalendar(id: string, updates: Partial<Extern
 }
 
 export async function toggleExternalCalendar(id: string, enabled: boolean): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.calendars.update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<"external_calendars">,
         updates: { enabled }
     });

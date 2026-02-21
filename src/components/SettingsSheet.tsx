@@ -14,6 +14,7 @@ import {
 import type { Language, ExternalCalendar } from '../types';
 import { cn } from '../utils/cn';
 import { useTelegram } from './TelegramProvider';
+import { getAuthToken } from '../auth-store';
 
 interface SettingsSheetProps {
     isOpen: boolean;
@@ -35,8 +36,9 @@ const CALENDAR_COLORS = [
 ];
 
 const CalendarExportSection = ({ t, userId }: { t: any, userId?: string }) => {
-    const exportUrl = useQuery(api.calendars.getExportUrl, userId ? { userId: userId as any } : "skip");
-    const groupExports = useQuery(api.calendars.getGroupExportUrls, userId ? { userId: userId as any } : "skip");
+    const authToken = getAuthToken();
+    const exportUrl = useQuery(api.calendars.getExportUrl, userId && authToken ? { userId: userId as any, authToken } : "skip");
+    const groupExports = useQuery(api.calendars.getGroupExportUrls, userId && authToken ? { userId: userId as any, authToken } : "skip");
 
     const [mainCopied, setMainCopied] = useState(false);
     const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
@@ -137,10 +139,14 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarUrl, setCalendarUrl] = useState('');
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
-    const { firstName, logout, convexUser, onAuth } = useTelegram();
-    const me = useQuery(api.users.getMe, convexUser?._id ? { userId: convexUser._id as any } : "skip");
+    const { firstName, logout, convexUser, backdoorLogin } = useTelegram();
+    const me = useQuery(
+        api.users.getMe,
+        convexUser?._id && getAuthToken() ? { userId: convexUser._id as any, authToken: getAuthToken()! } : "skip"
+    );
 
     const [customUserId, setCustomUserId] = useState('');
+    const [backdoorSecret, setBackdoorSecret] = useState('');
 
     if (!isOpen) return null;
 
@@ -370,9 +376,12 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                 </>
             )}
 
-            {minimal && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.')) && (
+            {minimal
+                && import.meta.env.VITE_ENABLE_BACKDOOR_LOGIN === 'true'
+                && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.startsWith('192.'))
+                && (
                 <div className="mt-8 space-y-2">
-                    <p className="text-xs text-center text-ios-gray">Developer Login</p>
+                    <p className="text-xs text-center text-ios-gray">Developer Login (Secret Required)</p>
                     <div className="flex gap-2">
                         <input
                             type="text"
@@ -381,14 +390,21 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                             onChange={(e) => setCustomUserId(e.target.value)}
                             className="flex-1 px-4 py-3 bg-ios-background dark:bg-zinc-800 rounded-xl text-sm dark:text-white"
                         />
+                    </div>
+                    <div className="flex gap-2">
+                        <input
+                            type="password"
+                            placeholder="Backdoor secret"
+                            value={backdoorSecret}
+                            onChange={(e) => setBackdoorSecret(e.target.value)}
+                            className="flex-1 px-4 py-3 bg-ios-background dark:bg-zinc-800 rounded-xl text-sm dark:text-white"
+                        />
                         <button
-                            onClick={() => {
+                            onClick={async () => {
                                 const id = parseInt(customUserId) || 129516266;
-                                onAuth({
-                                    id,
-                                    first_name: "Dev User",
-                                    username: "dev_user_" + id
-                                });
+                                if (!backdoorSecret.trim()) return;
+                                await backdoorLogin(id, backdoorSecret.trim());
+                                setBackdoorSecret('');
                                 onClose();
                             }}
                             className="px-4 py-3 bg-ios-blue text-white font-medium rounded-xl text-sm"

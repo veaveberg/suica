@@ -5,9 +5,9 @@ import { internal } from "./_generated/api";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         if (user.role === "admin") {
             return await ctx.db.query("attendance").collect();
@@ -45,13 +45,14 @@ export const get = query({
 export const mark = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         lesson_id: v.id("lessons"),
         student_id: v.id("students"),
         status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
         payment_amount: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         // check if exists
         const existing = await ctx.db
@@ -90,10 +91,11 @@ export const mark = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("attendance"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const record = await ctx.db.get(args.id);
 
         if (!record) throw new Error("Attendance record not found");
@@ -119,6 +121,7 @@ export const remove = mutation({
 export const syncLessonAttendance = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         lesson_id: v.id("lessons"),
         attendance: v.array(v.object({
             student_id: v.id("students"),
@@ -127,7 +130,7 @@ export const syncLessonAttendance = mutation({
         }))
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.lesson_id);
         if (!lesson) throw new Error("Lesson not found");
 
@@ -192,6 +195,7 @@ export const syncLessonAttendanceOnly = syncLessonAttendance; // Alias if needed
 export const bulkCreate = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         attendance: v.array(v.object({
             lesson_id: v.id("lessons"),
             student_id: v.id("students"),
@@ -200,7 +204,7 @@ export const bulkCreate = mutation({
         }))
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const record of args.attendance) {
             await ctx.db.insert("attendance", {

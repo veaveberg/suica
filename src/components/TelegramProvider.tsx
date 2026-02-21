@@ -2,7 +2,7 @@ import { useEffect, useState, createContext, useContext, useCallback } from 'rea
 import type { ReactNode } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { setAuthUser, getAuthRole, clearAuthUser, currentUserId as storedUserId } from '../auth-store';
+import { setAuthUser, getAuthRole, clearAuthUser, currentUserId as storedUserId, getAuthToken } from '../auth-store';
 
 interface TelegramContextValue {
     isReady: boolean;
@@ -14,6 +14,7 @@ interface TelegramContextValue {
     lastName?: string;
     convexUser?: { _id: string; role: string; tokenIdentifier?: string };
     loginStandalone: () => Promise<void>;
+    backdoorLogin: (targetTelegramId: number, accessSecret: string) => Promise<void>;
     onAuth: (user: any) => Promise<void>;
     logout: () => void;
 }
@@ -23,6 +24,7 @@ const TelegramContext = createContext<TelegramContextValue>({
     isTelegram: false,
     colorScheme: 'light',
     loginStandalone: async () => { },
+    backdoorLogin: async () => { },
     onAuth: async () => { },
     logout: () => { },
 });
@@ -86,6 +88,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
     }>({});
 
     const login = useMutation(api.users.login);
+    const backdoorLoginMutation = useMutation((api.users as any).backdoorLogin);
 
     const onAuth = useCallback(async (tgUser: any) => {
         console.log("[TelegramAuth] Callback received from widget:", tgUser);
@@ -96,7 +99,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
             });
             console.log("[TelegramAuth] Convex login mutation result:", user);
             if (user) {
-                setAuthUser(user._id, user.role, user.studentId);
+                setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
                 setUserData({
                     userId: tgUser.id,
                     firstName: tgUser.first_name,
@@ -112,13 +115,20 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
     }, [login]);
 
     const loginStandalone = async () => {
-        const devUser = {
-            id: 129516266,
-            first_name: "Alexander",
-            username: "alexvber",
-        };
-        await onAuth(devUser);
+        throw new Error("Standalone login is disabled. Use backdoor login with secret.");
     };
+
+    const backdoorLogin = useCallback(async (targetTelegramId: number, accessSecret: string) => {
+        const user = await backdoorLoginMutation({ targetTelegramId, accessSecret });
+        if (!user) return;
+        setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
+        setUserData({
+            userId: targetTelegramId,
+            firstName: user.name,
+            username: user.username,
+            convexUser: { _id: user._id, role: user.role, tokenIdentifier: user.tokenIdentifier }
+        });
+    }, [backdoorLoginMutation]);
 
     const logout = () => {
         clearAuthUser();
@@ -135,9 +145,14 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                 setIsTelegram(false);
                 // Check if already logged in via storage
                 if (storedUserId) {
+                    const authToken = getAuthToken();
                     setUserData({
                         convexUser: { _id: storedUserId, role: getAuthRole()! }
                     });
+                    if (!authToken) {
+                        clearAuthUser();
+                        setUserData({});
+                    }
                 }
                 setIsReady(true);
                 return;
@@ -171,7 +186,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                         }
                     });
                     if (user) {
-                        setAuthUser(user._id, user.role, user.studentId);
+                        setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
                         setUserData({
                             userId: tgWebApp.initDataUnsafe.user.id,
                             username: tgWebApp.initDataUnsafe.user.username,
@@ -198,7 +213,12 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         initTelegram();
     }, [login]);
 
-    const me = useQuery(api.users.getMe, userData.convexUser?._id ? { userId: userData.convexUser._id as any } : "skip");
+    const me = useQuery(
+        api.users.getMe,
+        userData.convexUser?._id && getAuthToken()
+            ? { userId: userData.convexUser._id as any, authToken: getAuthToken()! }
+            : "skip"
+    );
 
     useEffect(() => {
         if (me) {
@@ -232,6 +252,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         colorScheme,
         ...userData,
         loginStandalone,
+        backdoorLogin,
         onAuth,
         logout
     };

@@ -6,9 +6,9 @@ import type { Id, Doc } from "./_generated/dataModel";
 declare const process: { env: { [key: string]: string | undefined } };
 
 export const get = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
 
         // Only teachers (and admins) have external calendars
         if (user.role === "admin") {
@@ -25,13 +25,14 @@ export const get = query({
 export const create = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         name: v.string(),
         url: v.string(),
         color: v.string(),
         enabled: v.boolean(),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("external_calendars", {
             name: args.name,
@@ -46,6 +47,7 @@ export const create = mutation({
 export const update = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("external_calendars"),
         updates: v.object({
             name: v.optional(v.string()),
@@ -56,7 +58,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const cal = await ctx.db.get(args.id);
 
         if (!cal) throw new Error("Calendar not found");
@@ -71,10 +73,11 @@ export const update = mutation({
 export const remove = mutation({
     args: {
         userId: v.id("users"),
+        authToken: v.string(),
         id: v.id("external_calendars"),
     },
     handler: async (ctx, args) => {
-        const user = await ensureTeacher(ctx, args.userId);
+        const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const cal = await ctx.db.get(args.id);
 
         if (!cal) throw new Error("Calendar not found");
@@ -89,8 +92,9 @@ export const remove = mutation({
 
 // Returns the ICS export URL for the user
 export const getExportUrl = query({
-    args: { userId: v.id("users") },
-    handler: async (_ctx, args) => {
+    args: { userId: v.id("users"), authToken: v.string() },
+    handler: async (ctx, args) => {
+        await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
         // Construct the URL. In Convex, we can use the configured site URL.
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return null;
@@ -100,9 +104,9 @@ export const getExportUrl = query({
 });
 
 export const getGroupExportUrls = query({
-    args: { userId: v.id("users") },
+    args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
-        const user = await ensureTeacherOrStudent(ctx, args.userId);
+        const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return [];
 

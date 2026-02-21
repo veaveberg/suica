@@ -1,6 +1,6 @@
 import { convex } from './convex-client';
 import { api } from '../convex/_generated/api';
-import { getAuthUserId } from './auth-store';
+import { getAuthToken, getAuthUserId } from './auth-store';
 import type { Id } from '../convex/_generated/dataModel';
 
 // Map table names to Convex API modules
@@ -20,14 +20,21 @@ const convexApi: any = {
 
 type TableName = keyof typeof convexApi;
 
-export async function getAll<T>(table: TableName): Promise<T[]> {
+function requireAuth() {
     const userId = getAuthUserId();
+    const authToken = getAuthToken();
+    if (!userId || !authToken) throw new Error("Unauthenticated");
+    return { userId: userId as Id<"users">, authToken };
+}
+
+export async function getAll<T>(table: TableName): Promise<T[]> {
+    const { userId, authToken } = requireAuth();
     // The following line seems to be a partial or incorrect edit from the user's instruction.
     // It's syntactically incorrect and references `ctx.db` which is not available here.
     // Reverting to original line based on the instruction's intent to fix implicit conversions,
     // and the fact that the provided snippet is malformed.
     // If the user intended to add a new line, it should be clearly specified.
-    const data = await convex.query(convexApi[table].get, { userId: userId as Id<"users"> });
+    const data = await convex.query(convexApi[table].get, { userId, authToken });
     return (data || []).map((item: any) => ({ ...item, id: item._id })) as T[];
 }
 
@@ -48,20 +55,22 @@ export async function getById<T>(table: TableName, id: string): Promise<T | null
 }
 
 export async function create<T>(table: TableName, data: any): Promise<T> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     // Special handling if needed (e.g. userId injection is done by wrapper usually)
     // Our convex mutations expect `userId`.
     const id = await convex.mutation(convexApi[table].create, {
         ...data,
-        userId: userId as Id<"users">
+        userId,
+        authToken
     });
     return { ...data, id, _id: id } as T;
 }
 
 export async function update<T>(table: TableName, id: string, data: any): Promise<T> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(convexApi[table].update, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<any>,
         updates: data
     });
@@ -70,25 +79,28 @@ export async function update<T>(table: TableName, id: string, data: any): Promis
 }
 
 export async function remove(table: TableName, id: string): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(convexApi[table].remove, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         id: id as Id<any>
     });
 }
 
 export async function bulkCreate<T>(table: TableName, items: any[]): Promise<T[]> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     if (table === 'lessons') {
         await convex.mutation(api.lessons.bulkCreate, {
-            userId: userId as Id<"users">,
+            userId,
+            authToken,
             lessons: items
         });
         return items as T[];
     }
     if (table === 'attendance') {
         await convex.mutation(api.attendance.bulkCreate, {
-            userId: userId as Id<"users">,
+            userId,
+            authToken,
             attendance: items
         });
         return items as T[];
@@ -97,9 +109,10 @@ export async function bulkCreate<T>(table: TableName, items: any[]): Promise<T[]
 }
 
 export async function syncAttendance(lessonId: string, attendance: any[]): Promise<void> {
-    const userId = getAuthUserId();
+    const { userId, authToken } = requireAuth();
     await convex.mutation(api.attendance.syncLessonAttendance, {
-        userId: userId as Id<"users">,
+        userId,
+        authToken,
         lesson_id: lessonId as Id<"lessons">,
         attendance
     });

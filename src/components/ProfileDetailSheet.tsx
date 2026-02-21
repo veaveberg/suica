@@ -4,6 +4,7 @@ import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { X, Instagram } from 'lucide-react';
 import { TelegramIcon } from './Icons';
+import { getAuthToken } from '../auth-store';
 
 interface ProfileDetailSheetProps {
     isOpen: boolean;
@@ -34,8 +35,11 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
     if (!user) return null;
 
     const handleSave = async () => {
+        const authToken = getAuthToken();
+        if (!authToken) return;
         await updateProfile({
             userId: user._id,
+            authToken,
             updates: {
                 name: name.trim() || undefined,
                 username: tgUsername.replace(/@/g, '').trim() || undefined,

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { api } from '../../convex/_generated/api';
 import { convex } from '../convex-client'; // Direct client for loops
-import { getAuthUserId } from '../auth-store';
+import { getAuthToken, getAuthUserId } from '../auth-store';
 import type { Id } from '../../convex/_generated/dataModel';
 
 const TABLES = [
@@ -24,6 +24,10 @@ export const Migration: React.FC = () => {
 
         try {
             const userId = getAuthUserId();
+            const authToken = getAuthToken();
+            if (!userId || !authToken) {
+                throw new Error("Unauthenticated");
+            }
             // Fetch from local API
             // We assume the app is running on same origin or proxy is set up in vite.config
             // Vite defaults to proxying /api to 3001 if configured.
@@ -82,7 +86,7 @@ export const Migration: React.FC = () => {
                 const list = await res.json();
 
                 // Idempotency: Fetch existing
-                const existingGroups = await convex.query(api.groups.get, { userId: userId as Id<"users"> });
+                const existingGroups = await convex.query(api.groups.get, { userId: userId as Id<"users">, authToken });
                 const existingMap = new Map(existingGroups.map(g => [g.name, g._id]));
 
                 for (const item of list) {
@@ -94,6 +98,7 @@ export const Migration: React.FC = () => {
 
                     const nid = await convex.mutation(api.groups.create, {
                         userId: userId as Id<"users">,
+                            authToken,
                         name: item.name,
                         color: item.color,
                         default_duration_minutes: item.default_duration_minutes,
@@ -110,7 +115,7 @@ export const Migration: React.FC = () => {
                 const list = await res.json();
 
                 // Idempotency: Fetch existing
-                const existingStudents = await convex.query(api.students.get, { userId: userId as Id<"users"> });
+                const existingStudents = await convex.query(api.students.get, { userId: userId as Id<"users">, authToken });
                 const existingMap = new Map(existingStudents.map(s => [s.name, s._id]));
 
                 for (const item of list) {
@@ -122,6 +127,7 @@ export const Migration: React.FC = () => {
 
                     const nid = await convex.mutation(api.students.create, {
                         userId: userId as Id<"users">,
+                            authToken,
                         name: item.name,
                         telegram_username: item.telegram_username,
                         instagram_username: item.instagram_username,
@@ -142,6 +148,7 @@ export const Migration: React.FC = () => {
                     if (sid && gid) {
                         await convex.mutation(api.student_groups.create, {
                             userId: userId as Id<"users">,
+                            authToken,
                             student_id: sid as Id<"students">,
                             group_id: gid as Id<"groups">
                         });
@@ -157,6 +164,7 @@ export const Migration: React.FC = () => {
                 for (const item of list) {
                     const nid = await convex.mutation(api.tariffs.create, {
                         userId: userId as Id<"users">,
+                            authToken,
                         name: item.name,
                         type: item.type,
                         price: item.price,
@@ -183,6 +191,7 @@ export const Migration: React.FC = () => {
 
                         await convex.mutation(api.subscriptions.create, {
                             userId: userId as Id<"users">,
+                            authToken,
                             user_id: sid as Id<"students">,
                             group_id: gid as Id<"groups">,
                             tariff_id: tariffId as any,
@@ -209,6 +218,7 @@ export const Migration: React.FC = () => {
                     if (gid) {
                         const nid = await convex.mutation(api.schedules.create, {
                             userId: userId as Id<"users">,
+                            authToken,
                             group_id: gid as Id<"groups">,
                             day_of_week: item.day_of_week,
                             time: item.time,
@@ -234,6 +244,7 @@ export const Migration: React.FC = () => {
 
                         const nid = await convex.mutation(api.lessons.create, {
                             userId: userId as Id<"users">,
+                            authToken,
                             group_id: gid as Id<"groups">,
                             date: item.date,
                             time: item.time,
@@ -260,6 +271,7 @@ export const Migration: React.FC = () => {
                     if (lid && sid) {
                         await convex.mutation(api.attendance.mark, {
                             userId: userId as Id<"users">,
+                            authToken,
                             lesson_id: lid as Id<"lessons">,
                             student_id: sid as Id<"students">,
                             status: item.status
@@ -276,6 +288,7 @@ export const Migration: React.FC = () => {
                 for (const item of list) {
                     const nid = await convex.mutation(api.passes.create, {
                         userId: userId as Id<"users">,
+                            authToken,
                         name: item.name,
                         price: item.price,
                         lessons_count: item.lessons_count,
@@ -297,6 +310,7 @@ export const Migration: React.FC = () => {
                     if (pid && gid) {
                         await convex.mutation(api.pass_groups.create, {
                             userId: userId as Id<"users">,
+                            authToken,
                             pass_id: pid as Id<"passes">,
                             group_id: gid as Id<"groups">
                         });
@@ -312,6 +326,7 @@ export const Migration: React.FC = () => {
                 for (const item of list) {
                     await convex.mutation(api.calendars.create, {
                         userId: userId as Id<"users">,
+                            authToken,
                         name: item.name,
                         url: item.url,
                         color: item.color,
