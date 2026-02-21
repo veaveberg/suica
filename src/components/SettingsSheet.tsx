@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { X, Sun, Globe, Trash2, ChevronRight, ArrowLeft, Calendar, Plus, Check, Eye, EyeOff, LogOut, Pencil, Copy, Share } from 'lucide-react';
 import {
@@ -37,11 +37,17 @@ const CALENDAR_COLORS = [
 
 const CalendarExportSection = ({ t, userId }: { t: any, userId?: string }) => {
     const authToken = getAuthToken();
+    const ensureExportToken = useMutation((api.calendars as any).ensureExportTokenForUser);
     const exportUrl = useQuery(api.calendars.getExportUrl, userId && authToken ? { userId: userId as any, authToken } : "skip");
     const groupExports = useQuery(api.calendars.getGroupExportUrls, userId && authToken ? { userId: userId as any, authToken } : "skip");
 
     const [mainCopied, setMainCopied] = useState(false);
     const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!userId || !authToken) return;
+        ensureExportToken({ userId: userId as any, authToken }).catch(() => { });
+    }, [userId, authToken, ensureExportToken]);
 
 
     const handleCopy = (url: string, setFn: (v: boolean) => void) => {

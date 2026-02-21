@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUser } from "./permissions";
 import { createSessionToken } from "./session";
+import type { Id } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
 
@@ -65,6 +66,26 @@ function safeEqual(a: string, b: string): boolean {
         diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
     }
     return diff === 0;
+}
+
+function createRandomToken(bytes = 32): string {
+    const arr = new Uint8Array(bytes);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function ensureCalendarExportTokenExists(ctx: any, userId: Id<"users">) {
+    const existing = await ctx.db
+        .query("calendar_export_tokens")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .first();
+    if (existing) return;
+
+    await ctx.db.insert("calendar_export_tokens", {
+        userId,
+        token: createRandomToken(),
+        createdAt: new Date().toISOString(),
+    });
 }
 
 async function verifyWebAppInitData(initData: string, botToken: string): Promise<boolean> {
@@ -226,6 +247,7 @@ export const login = mutation({
                 const updated = await ctx.db.get(existingUser._id);
                 if (updated) finalUser = updated;
             }
+            await ensureCalendarExportTokenExists(ctx, finalUser._id);
             const sessionToken = await createSessionToken(finalUser._id, finalUser.role);
             return { ...finalUser, sessionToken };
         }
@@ -241,6 +263,7 @@ export const login = mutation({
 
         const created = await ctx.db.get(userId);
         if (!created) throw new Error("Failed to create user");
+        await ensureCalendarExportTokenExists(ctx, created._id);
         const sessionToken = await createSessionToken(created._id, created.role);
         return { ...created, sessionToken };
     },

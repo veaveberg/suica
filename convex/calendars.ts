@@ -1,9 +1,33 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 import type { Id, Doc } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
+
+function createRandomToken(bytes = 32): string {
+    const arr = new Uint8Array(bytes);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function getExportToken(ctx: any, userId: Id<"users">) {
+    return await ctx.db
+        .query("calendar_export_tokens")
+        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .first();
+}
+
+async function ensureExportToken(ctx: any, userId: Id<"users">) {
+    const existing = await getExportToken(ctx, userId);
+    if (existing) return existing;
+    const id = await ctx.db.insert("calendar_export_tokens", {
+        userId,
+        token: createRandomToken(),
+        createdAt: new Date().toISOString(),
+    });
+    return await ctx.db.get(id);
+}
 
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
@@ -98,8 +122,10 @@ export const getExportUrl = query({
         // Construct the URL. In Convex, we can use the configured site URL.
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return null;
+        const tokenDoc = await getExportToken(ctx, args.userId);
+        if (!tokenDoc) return null;
 
-        return `${siteUrl}/calendar?id=${args.userId}`;
+        return `${siteUrl}/calendar?t=${encodeURIComponent(tokenDoc.token)}`;
     },
 });
 
@@ -109,6 +135,8 @@ export const getGroupExportUrls = query({
         const user = await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
         const siteUrl = process.env.CONVEX_SITE_URL;
         if (!siteUrl) return [];
+        const tokenDoc = await getExportToken(ctx, args.userId);
+        if (!tokenDoc) return [];
 
         let groups: Doc<"groups">[] = [];
 
@@ -142,7 +170,45 @@ export const getGroupExportUrls = query({
                 id: g._id,
                 name: g.name,
                 color: g.color,
-                url: `${siteUrl}/calendar?id=${args.userId}&groupId=${g._id}`
+                url: `${siteUrl}/calendar?t=${encodeURIComponent(tokenDoc.token)}&groupId=${g._id}`
             }));
     }
+});
+
+export const rotateExportToken = mutation({
+    args: { userId: v.id("users"), authToken: v.string() },
+    handler: async (ctx, args) => {
+        await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
+        const current = await getExportToken(ctx, args.userId);
+        if (current) {
+            await ctx.db.patch(current._id, {
+                token: createRandomToken(),
+                createdAt: new Date().toISOString(),
+            });
+        } else {
+            await ensureExportToken(ctx, args.userId);
+        }
+        return true;
+    },
+});
+
+export const ensureExportTokenForUser = mutation({
+    args: { userId: v.id("users"), authToken: v.string() },
+    handler: async (ctx, args) => {
+        await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
+        await ensureExportToken(ctx, args.userId);
+        return true;
+    },
+});
+
+export const resolveUserIdByExportToken = internalQuery({
+    args: { token: v.string() },
+    handler: async (ctx, args) => {
+        const tokenDoc = await ctx.db
+            .query("calendar_export_tokens")
+            .withIndex("by_token", (q) => q.eq("token", args.token))
+            .first();
+        if (!tokenDoc) return null;
+        return tokenDoc.userId;
+    },
 });

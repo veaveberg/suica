@@ -130,4 +130,12 @@ export default defineSchema({
         lastFetched: v.optional(v.string()), // ISO string
         userId: v.string(),
     }).index("by_user", ["userId"]),
+
+    calendar_export_tokens: defineTable({
+        userId: v.id("users"),
+        token: v.string(),
+        createdAt: v.string(),
+    })
+        .index("by_user", ["userId"])
+        .index("by_token", ["token"]),
 });
