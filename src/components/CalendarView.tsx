@@ -23,8 +23,7 @@ interface CalendarViewProps {
 
 interface DragState {
   lesson: Lesson;
-  x: number;
-  y: number;
+  pointerId: number;
   offsetX: number;
   offsetY: number;
   hoverDate: string;
@@ -66,12 +65,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
   const [dragState, setDragState] = useState<DragState | null>(null);
   const dragStartRef = useRef<{
     lesson: Lesson;
+    pointerId: number;
+    targetEl: HTMLElement;
     startX: number;
     startY: number;
     offsetX: number;
     offsetY: number;
   } | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
+  const autoScrollTimerRef = useRef<number | null>(null);
+  const dragPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const dragQueuedPointRef = useRef<{ x: number; y: number } | null>(null);
+  const dragRafRef = useRef<number | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const suppressClickLessonIdRef = useRef<string | null>(null);
   const [pendingReschedule, setPendingReschedule] = useState<{
     lesson: Lesson;
@@ -221,22 +227,52 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
     return dayCell?.getAttribute('data-date') || null;
   };
 
+  const updateGhostPosition = () => {
+    if (!dragState || !dragGhostRef.current || !dragPointerRef.current) return;
+    const left = dragPointerRef.current.x - dragState.offsetX;
+    const top = dragPointerRef.current.y - dragState.offsetY;
+    dragGhostRef.current.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+  };
+
+  const applyDragPoint = (x: number, y: number) => {
+    dragPointerRef.current = { x, y };
+    updateGhostPosition();
+    const nextHoverDate = getHoverDateFromPoint(x, y);
+    setDragState(prev => {
+      if (!prev) return prev;
+      if (!nextHoverDate || nextHoverDate === prev.hoverDate) return prev;
+      return { ...prev, hoverDate: nextHoverDate };
+    });
+  };
+
   useEffect(() => {
     if (!dragState) return;
 
     const onPointerMove = (e: PointerEvent) => {
-      setDragState(prev => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          x: e.clientX,
-          y: e.clientY,
-          hoverDate: getHoverDateFromPoint(e.clientX, e.clientY) || prev.hoverDate
-        };
+      if (e.pointerId !== dragState.pointerId) return;
+      e.preventDefault();
+      dragQueuedPointRef.current = { x: e.clientX, y: e.clientY };
+      if (dragRafRef.current !== null) return;
+      dragRafRef.current = window.requestAnimationFrame(() => {
+        dragRafRef.current = null;
+        const point = dragQueuedPointRef.current;
+        if (!point) return;
+        applyDragPoint(point.x, point.y);
       });
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (e: PointerEvent) => {
+      if (e.pointerId !== dragState.pointerId) return;
+
+      const dragStart = dragStartRef.current;
+      if (dragStart?.targetEl?.hasPointerCapture?.(dragState.pointerId)) {
+        try {
+          dragStart.targetEl.releasePointerCapture(dragState.pointerId);
+        } catch {
+          // no-op
+        }
+      }
+
       setDragState(prev => {
         if (!prev) return prev;
 
@@ -256,17 +292,63 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
         return null;
       });
       dragStartRef.current = null;
+      dragPointerRef.current = null;
+      dragQueuedPointRef.current = null;
       clearLongPressTimer();
     };
 
-    window.addEventListener('pointermove', onPointerMove, { passive: true });
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
+
+    autoScrollTimerRef.current = window.setInterval(() => {
+      if (!containerRef.current || !dragPointerRef.current) return;
+
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      const x = dragPointerRef.current.x;
+      const y = dragPointerRef.current.y;
+      const threshold = 56;
+
+      let delta = 0;
+      if (y < rect.top + threshold) {
+        const ratio = (rect.top + threshold - y) / threshold;
+        delta = -Math.max(2, Math.round(ratio * 10));
+      } else if (y > rect.bottom - threshold) {
+        const ratio = (y - (rect.bottom - threshold)) / threshold;
+        delta = Math.max(2, Math.round(ratio * 10));
+      }
+
+      if (delta !== 0) {
+        container.scrollTop += delta;
+      }
+
+      const nextHoverDate = getHoverDateFromPoint(x, y);
+      if (nextHoverDate) {
+        setDragState(prev => {
+          if (!prev || prev.hoverDate === nextHoverDate) return prev;
+          return { ...prev, hoverDate: nextHoverDate };
+        });
+      }
+    }, 16);
+
     return () => {
+      if (dragRafRef.current !== null) {
+        window.cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = null;
+      }
+      if (autoScrollTimerRef.current !== null) {
+        window.clearInterval(autoScrollTimerRef.current);
+        autoScrollTimerRef.current = null;
+      }
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
     };
+  }, [dragState]);
+
+  useEffect(() => {
+    updateGhostPosition();
   }, [dragState]);
 
   const handleRescheduleCancel = () => {
@@ -323,6 +405,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
     const handleScroll = () => {
       const container = containerRef.current;
       if (!container) return;
+      if (dragState) return;
 
       const element = document.getElementById('today-cell');
       if (!element) {
@@ -394,7 +477,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
         container.removeEventListener('wheel', onInteraction);
       };
     }
-  }, [onYearChange]);
+  }, [onYearChange, dragState]);
 
   const weekDays = useMemo(() => {
     const now = new Date();
@@ -427,9 +510,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
       <div
         ref={containerRef}
         className={cn(
-          'h-full overflow-y-auto overscroll-y-contain hide-scrollbar pb-40 relative transition-opacity duration-500 scroll-pt-[40px]',
+          'h-full overflow-y-auto overscroll-y-contain hide-scrollbar pb-40 relative transition-opacity duration-500 scroll-pt-[40px] select-none',
           isReady ? 'opacity-100' : 'opacity-0 invisible'
         )}
+        style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
       >
         {/* Sticky Weekdays Header */}
         <div className="sticky top-0 z-30 bg-ios-background dark:bg-black border-b border-gray-200 dark:border-zinc-800">
@@ -512,8 +596,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                           onPointerDown={(e) => {
                             if (!canDrag || !lesson.id || e.button !== 0) return;
                             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            const targetEl = e.currentTarget as HTMLElement;
                             dragStartRef.current = {
                               lesson,
+                              pointerId: e.pointerId,
+                              targetEl,
                               startX: e.clientX,
                               startY: e.clientY,
                               offsetX: e.clientX - rect.left,
@@ -523,11 +610,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             longPressTimerRef.current = window.setTimeout(() => {
                               const start = dragStartRef.current;
                               if (!start || !start.lesson.id) return;
+                              dragPointerRef.current = { x: start.startX, y: start.startY };
+                              try {
+                                start.targetEl.setPointerCapture(start.pointerId);
+                              } catch {
+                                // no-op
+                              }
                               suppressClickLessonIdRef.current = String(start.lesson.id);
                               setDragState({
                                 lesson: start.lesson,
-                                x: start.startX,
-                                y: start.startY,
+                                pointerId: start.pointerId,
                                 offsetX: start.offsetX,
                                 offsetY: start.offsetY,
                                 hoverDate: start.lesson.date
@@ -536,6 +628,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                           }}
                           onPointerMove={(e) => {
                             const start = dragStartRef.current;
+                            if (start && e.pointerId !== start.pointerId) return;
                             if (!start || dragState) return;
                             const moved = Math.hypot(e.clientX - start.startX, e.clientY - start.startY) > 8;
                             if (moved) {
@@ -543,7 +636,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                               dragStartRef.current = null;
                             }
                           }}
-                          onPointerUp={() => {
+                          onPointerUp={(e) => {
+                            const start = dragStartRef.current;
+                            if (start && e.pointerId !== start.pointerId) return;
                             if (!dragState) {
                               clearLongPressTimer();
                               dragStartRef.current = null;
@@ -562,7 +657,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                           )}
                           style={{
                             backgroundColor: isCancelled ? `${color}20` : color,
-                            color: isCancelled ? color : '#FFFFFF'
+                            color: isCancelled ? color : '#FFFFFF',
+                            touchAction: canDrag ? 'none' : 'auto'
                           }}
                         >
                           <div className={cn('font-bold leading-[1.1]', isCancelled && 'line-through')}>
@@ -726,10 +822,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
 
         {dragState && (
           <div
+            ref={dragGhostRef}
             className="fixed z-[110] pointer-events-none w-[calc((100vw-1rem)/7)] max-w-[160px] text-[9px] text-left px-1 py-0.5 rounded-md leading-tight overflow-hidden opacity-50"
             style={{
-              left: dragState.x - dragState.offsetX,
-              top: dragState.y - dragState.offsetY,
+              left: 0,
+              top: 0,
               backgroundColor: getGroupColor(dragState.lesson.group_id),
               color: '#FFFFFF'
             }}
