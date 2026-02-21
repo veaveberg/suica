@@ -37,6 +37,8 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                 return t('attendance_present') || 'Present';
             case 'counted_absence_invalid':
                 return t('attendance_absence_invalid') || 'Invalid skip';
+            case 'counted_no_attendance_consecutive':
+                return t('reason_counted_no_attendance_consecutive') || 'Not marked (auto-counted)';
             case 'not_counted_valid_skip':
                 return t('attendance_absence_valid') || 'Valid skip';
             case 'not_counted_cancelled':
@@ -55,7 +57,9 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
 
     // Split into 3 categories now (Covered, Uncovered/Debt, Not Counted)
     const coveredEntries = auditResult.auditEntries.filter(e =>
-        e.reason === 'counted_present' || e.reason === 'counted_absence_invalid'
+        e.reason === 'counted_present' ||
+        e.reason === 'counted_absence_invalid' ||
+        e.reason === 'counted_no_attendance_consecutive'
     );
     const uncoveredEntries = auditResult.auditEntries.filter(e =>
         e.reason === 'uncovered_pass_depleted' || e.reason === 'uncovered_no_matching_pass'
@@ -110,7 +114,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                             entry.attendanceStatus === 'present' ? 'text-ios-green' :
                                 entry.attendanceStatus === 'absence_invalid' ? 'text-ios-red' :
                                     entry.attendanceStatus === 'absence_valid' ? 'text-ios-blue' :
-                                        entry.reason === 'counted_absence_invalid' ? 'text-ios-orange' : 'text-ios-gray'
+                                        entry.reason === 'counted_absence_invalid' || entry.reason === 'counted_no_attendance_consecutive' ? 'text-ios-orange' : 'text-ios-gray'
                         )}>
                             {entry.attendanceStatus === 'present' ? t('attendance_present') :
                                 entry.attendanceStatus === 'absence_invalid' ? t('attendance_absence_invalid') :
@@ -127,7 +131,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                             <div className="text-[10px] text-ios-red font-medium mt-0.5 opacity-80">
                                 {getReasonLabel(entry.reason)}
                             </div>
-                        ) : entry.reason !== 'counted_present' && entry.reason !== 'counted_absence_invalid' && (
+                        ) : entry.reason !== 'counted_present' && entry.reason !== 'counted_absence_invalid' && entry.reason !== 'counted_no_attendance_consecutive' && (
                             <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
                                 {getReasonLabel(entry.reason)}
                             </div>
@@ -302,6 +306,7 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
             <LessonDetailSheet
                 lesson={selectedLesson}
                 onClose={() => setSelectedLesson(null)}
+                zIndexClass="z-[120]"
             />
         </>
     );

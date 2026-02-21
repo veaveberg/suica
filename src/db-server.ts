@@ -205,6 +205,28 @@ export async function generateFutureLessons(groupId: string, count: number = 4):
     });
 }
 
+export async function bulkCreateLessons(lessons: Array<{
+    group_id: string;
+    date: string;
+    time: string;
+    duration_minutes: number;
+    status: 'upcoming' | 'cancelled' | 'completed';
+    schedule_id?: string;
+    students_count?: number;
+    total_amount?: number;
+    info_for_students?: string;
+}>): Promise<void> {
+    const userId = getAuthUserId();
+    await convex.mutation(api.lessons.bulkCreate, {
+        userId: userId as Id<"users">,
+        lessons: lessons.map(lesson => ({
+            ...lesson,
+            group_id: lesson.group_id as Id<"groups">,
+            schedule_id: lesson.schedule_id as Id<"schedules"> | undefined
+        }))
+    });
+}
+
 export async function cancelLesson(lessonId: string): Promise<void> {
     const userId = getAuthUserId();
     await convex.mutation(api.lessons.update, {

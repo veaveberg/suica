@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Ban, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle, Plus, Settings, Calendar, Clock, CalendarClock, ChevronDown, ChevronRight, Archive } from 'lucide-react';
+import { X, Ban, Users, Trash2, XCircle, CheckCircle2, Check, AlertTriangle, Plus, Settings, Calendar, Clock, Timer, CalendarClock, ChevronDown, ChevronRight, Archive } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student, AttendanceStatus } from '../types';
 import { useData } from '../DataProvider';
@@ -19,9 +19,10 @@ import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
 interface LessonDetailSheetProps {
     lesson: Lesson | null;
     onClose: () => void;
+    zIndexClass?: string;
 }
 
-export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: propLesson, onClose }) => {
+export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: propLesson, onClose, zIndexClass }) => {
     const { t, i18n } = useTranslation();
     const { groups, students, studentGroups, refreshLessons, attendance: allAttendance, subscriptions, lessons } = useData();
 
@@ -452,7 +453,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
     };
 
     return (
-        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
+        <div className={cn("fixed inset-0 flex items-end sm:items-center justify-center", zIndexClass || "z-[80]")}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
             <div className="relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col">
@@ -539,7 +540,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                 {/* Reschedule Form - Moved here */}
                                 {showReschedule && (
                                     <div className="space-y-4">
-                                        <div className="grid grid-cols-[2fr_1.2fr_85px] gap-2">
+                                        <div className="grid grid-cols-[2fr_1.2fr_110px] gap-2">
                                             <div>
                                                 <label className="text-sm text-ios-gray uppercase font-semibold block mb-1 pl-1">{t('date') || 'Date'}</label>
                                                 <div className="relative flex items-center bg-ios-background dark:bg-zinc-800 rounded-xl px-3">
@@ -566,7 +567,8 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                             </div>
                                             <div>
                                                 <label className="text-sm text-ios-gray uppercase font-semibold block mb-1 pl-1">&nbsp;</label>
-                                                <div className="flex items-baseline bg-ios-background dark:bg-zinc-800 rounded-xl px-2.5">
+                                                <div className="flex items-center bg-ios-background dark:bg-zinc-800 rounded-xl px-3">
+                                                    <Timer className="w-4 h-4 text-ios-gray flex-shrink-0" />
                                                     <input
                                                         type="number"
                                                         inputMode="numeric"
@@ -577,7 +579,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                                         onBlur={() => {
                                                             if (newDuration === '') setNewDuration(0);
                                                         }}
-                                                        className="w-full py-2.5 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-right"
+                                                        className="w-full py-2.5 pl-2 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-left"
                                                     />
                                                     <span className="text-base text-ios-gray pointer-events-none ml-1">
                                                         {t('minutes') || 'min'}

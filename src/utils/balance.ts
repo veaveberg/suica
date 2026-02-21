@@ -11,6 +11,7 @@ export interface StudentBalance {
 export type AuditReason =
     | 'counted_present'           // Attended, counted against pass
     | 'counted_absence_invalid'   // Invalid skip, counted against pass
+    | 'counted_no_attendance_consecutive' // No attendance mark; auto-counted by consecutive pass rule
     | 'not_counted_valid_skip'    // Valid skip, not counted
     | 'not_counted_no_attendance' // No attendance record (lesson exists but not marked)
     | 'not_counted_cancelled'     // Lesson was cancelled
@@ -76,7 +77,6 @@ export function calculateStudentGroupBalanceWithAudit(
     attendance: Attendance[],
     lessons: Lesson[]
 ): BalanceAuditResult {
-    const spendingStatuses = ['present', 'absence_invalid'];
     const auditEntries: BalanceAuditEntry[] = [];
 
     const today = new Date().toISOString().split('T')[0];
@@ -102,10 +102,13 @@ export function calculateStudentGroupBalanceWithAudit(
         attendanceByLesson.set(String(a.lesson_id), a);
     }
 
-    // Filter lessons that have attendance marked and sort by date
-    const lessonsWithAttendance = groupLessons
-        .filter(l => attendanceByLesson.has(String(l.id)))
+    // Sort all group lessons for deterministic pass allocation
+    const sortedGroupLessons = [...groupLessons]
         .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+    // Keep this subset for the no-pass branch, which still depends on explicit attendance marks
+    const lessonsWithAttendance = sortedGroupLessons
+        .filter(l => attendanceByLesson.has(String(l.id)));
 
     // Handle case: NO PASSES - all spending lessons = debt
     if (studentPasses.length === 0) {
@@ -181,6 +184,17 @@ export function calculateStudentGroupBalanceWithAudit(
     const sortedPasses = [...studentPasses].sort((a, b) =>
         a.purchase_date.localeCompare(b.purchase_date)
     );
+    const passCoversDate = (pass: Subscription, lessonDate: string): boolean => {
+        const afterStart = lessonDate >= pass.purchase_date;
+        const beforeExpiry = !pass.expiry_date || lessonDate <= pass.expiry_date;
+        if (!afterStart || !beforeExpiry) return false;
+        // Only use archived/expired-by-today passes for past lessons
+        if (pass.status === 'archived' && lessonDate >= today) return false;
+        if (pass.expiry_date && pass.expiry_date < today && lessonDate >= today) return false;
+        return true;
+    };
+    const hasConsecutivePassForDate = (lessonDate: string): boolean =>
+        sortedPasses.some(pass => pass.is_consecutive && passCoversDate(pass, lessonDate));
 
     // Track remaining capacity per pass and usage
     const passCapacity = new Map<string, number>();
@@ -192,8 +206,17 @@ export function calculateStudentGroupBalanceWithAudit(
 
     let lessonsCovered = 0;
 
-    for (const lesson of lessonsWithAttendance) {
-        const attendanceRecord = attendanceByLesson.get(String(lesson.id))!;
+    for (const lesson of sortedGroupLessons) {
+        const attendanceRecord = attendanceByLesson.get(String(lesson.id));
+        const autoConsumeConsecutive =
+            !attendanceRecord &&
+            lesson.date < today &&
+            hasConsecutivePassForDate(lesson.date);
+
+        // Ignore lessons without explicit attendance unless they should auto-consume a consecutive pass
+        if (!attendanceRecord && !autoConsumeConsecutive) {
+            continue;
+        }
 
         // Handle cancelled lessons
         if (lesson.status === 'cancelled') {
@@ -201,7 +224,7 @@ export function calculateStudentGroupBalanceWithAudit(
                 lessonId: String(lesson.id),
                 lessonDate: lesson.date,
                 lessonTime: lesson.time,
-                attendanceStatus: attendanceRecord.status,
+                attendanceStatus: attendanceRecord?.status ?? null,
                 status: 'not_counted',
                 reason: 'not_counted_cancelled'
             });
@@ -209,7 +232,7 @@ export function calculateStudentGroupBalanceWithAudit(
         }
 
         // Handle valid skips
-        if (attendanceRecord.status === 'absence_valid') {
+        if (attendanceRecord?.status === 'absence_valid') {
             auditEntries.push({
                 lessonId: String(lesson.id),
                 lessonDate: lesson.date,
@@ -221,28 +244,28 @@ export function calculateStudentGroupBalanceWithAudit(
             continue;
         }
 
-        // Spending status - try to find a pass
-        if (spendingStatuses.includes(attendanceRecord.status)) {
-            const isPresent = attendanceRecord.status === 'present';
-            const isInvalidSkip = attendanceRecord.status === 'absence_invalid';
+        const isPresent = autoConsumeConsecutive || attendanceRecord?.status === 'present';
+        const isInvalidSkip = attendanceRecord?.status === 'absence_invalid';
+        const isSpendingLesson = isPresent || isInvalidSkip;
+        const auditAttendanceStatus: AttendanceStatus | null = attendanceRecord?.status ?? null;
 
+        // Spending status - try to find a pass
+        if (isSpendingLesson) {
             let covered = false;
             let candidatePassId: string | undefined = undefined;
             let dateMatchesConsecutivePass = false;
 
             for (const pass of sortedPasses) {
-                const afterStart = lesson.date >= pass.purchase_date;
-                const beforeExpiry = !pass.expiry_date || lesson.date <= pass.expiry_date;
-
-                if (afterStart && beforeExpiry) {
-                    // Only use archived passes for past lessons
-                    if (pass.status === 'archived' && lesson.date >= today) continue;
-                    // Also check if expired by date relative to today
-                    if (pass.expiry_date && pass.expiry_date < today && lesson.date >= today) continue;
+                if (passCoversDate(pass, lesson.date)) {
 
                     // This pass covers the date range
                     candidatePassId = pass.id;
                     if (pass.is_consecutive) dateMatchesConsecutivePass = true;
+
+                    // Auto-consumed lessons only apply for consecutive passes
+                    if (autoConsumeConsecutive && !pass.is_consecutive) {
+                        continue;
+                    }
 
                     // IF it's an invalid skip, it ONLY consumes credits if the pass is consecutive
                     if (isInvalidSkip && !pass.is_consecutive) {
@@ -260,9 +283,11 @@ export function calculateStudentGroupBalanceWithAudit(
                             lessonId: String(lesson.id),
                             lessonDate: lesson.date,
                             lessonTime: lesson.time,
-                            attendanceStatus: attendanceRecord.status,
+                            attendanceStatus: auditAttendanceStatus,
                             status: 'counted',
-                            reason: isPresent ? 'counted_present' : 'counted_absence_invalid',
+                            reason: autoConsumeConsecutive
+                                ? 'counted_no_attendance_consecutive'
+                                : (isPresent ? 'counted_present' : 'counted_absence_invalid'),
                             coveredByPassId: pass.id!
                         });
                         break;
@@ -283,7 +308,7 @@ export function calculateStudentGroupBalanceWithAudit(
                         lessonId: String(lesson.id),
                         lessonDate: lesson.date,
                         lessonTime: lesson.time,
-                        attendanceStatus: attendanceRecord.status,
+                        attendanceStatus: auditAttendanceStatus,
                         status: 'counted',
                         // If a pass matched the date but had no capacity: 'uncovered_pass_depleted'
                         // If no pass matched the date at all: 'uncovered_no_matching_pass'
@@ -295,7 +320,7 @@ export function calculateStudentGroupBalanceWithAudit(
                         lessonId: String(lesson.id),
                         lessonDate: lesson.date,
                         lessonTime: lesson.time,
-                        attendanceStatus: attendanceRecord.status,
+                        attendanceStatus: auditAttendanceStatus,
                         status: 'not_counted',
                         reason: 'not_counted_no_attendance'
                     });

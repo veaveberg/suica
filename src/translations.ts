@@ -215,6 +215,7 @@ export const translations: Record<Language, any> = {
         lessons_remaining_count: 'осталось',
         reason_pass_depleted: 'Абонемент исчерпан',
         reason_no_matching_pass: 'Нет абонемента',
+        reason_counted_no_attendance_consecutive: 'Списано по правилу абонемента',
         // Calendar
         external_calendars: 'Внешние календари',
         export_calendar: 'Экспорт календаря',
@@ -454,6 +455,7 @@ export const translations: Record<Language, any> = {
         lessons_remaining_count: 'remaining',
         reason_pass_depleted: 'Pass depleted',
         reason_no_matching_pass: 'No pass',
+        reason_counted_no_attendance_consecutive: 'Auto-counted according to pass',
         external_calendars: 'External Calendars',
         export_calendar: 'Export Calendar',
         export_calendar_desc: 'Link for Apple/Google Calendar',
@@ -683,6 +685,7 @@ export const translations: Record<Language, any> = {
         lessons_remaining_count: 'დარჩენილია',
         reason_pass_depleted: 'აბონემენტი ამოიწურა',
         reason_no_matching_pass: 'აბონემენტი არ არის',
+        reason_counted_no_attendance_consecutive: 'ავტომატურად ჩაითვალა აბონემენტის წესით',
         external_calendars: 'გარე კალენდრები',
         export_calendar: 'კალენდრის ექსპორტი',
         export_calendar_desc: 'ბმული Apple/Google Calendar-ისთვის',
