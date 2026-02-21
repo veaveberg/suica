@@ -871,7 +871,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
         />
 
         {showRescheduleConfirm && pendingReschedule && (
-          <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center">
+          <div
+            className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center"
+            style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+          >
             <div className="absolute inset-0 bg-black/40" />
             <div className="relative w-full max-w-lg bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl p-4 border-t border-gray-200 dark:border-zinc-800">
               <div className="space-y-4">
