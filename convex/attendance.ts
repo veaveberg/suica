@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { rateLimiter } from "./rateLimits";
 
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
@@ -52,6 +53,7 @@ export const mark = mutation({
         payment_amount: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         // check if exists
@@ -95,6 +97,7 @@ export const remove = mutation({
         id: v.id("attendance"),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const record = await ctx.db.get(args.id);
 
@@ -130,6 +133,7 @@ export const syncLessonAttendance = mutation({
         }))
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.lesson_id);
         if (!lesson) throw new Error("Lesson not found");
@@ -204,6 +208,7 @@ export const bulkCreate = mutation({
         }))
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const record of args.attendance) {

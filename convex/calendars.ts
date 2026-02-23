@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { rateLimiter } from "./rateLimits";
 import type { Id, Doc } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
@@ -56,6 +57,7 @@ export const create = mutation({
         enabled: v.boolean(),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("external_calendars", {
@@ -82,6 +84,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const cal = await ctx.db.get(args.id);
 
@@ -101,6 +104,7 @@ export const remove = mutation({
         id: v.id("external_calendars"),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const cal = await ctx.db.get(args.id);
 
@@ -178,6 +182,7 @@ export const getGroupExportUrls = query({
 export const rotateExportToken = mutation({
     args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         await ensureTeacherOrStudent(ctx, args.userId, args.authToken);
         const current = await getExportToken(ctx, args.userId);
         if (current) {

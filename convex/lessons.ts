@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { rateLimiter } from "./rateLimits";
 
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
@@ -93,6 +94,7 @@ export const create = mutation({
         info_for_students: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("lessons", {
@@ -128,6 +130,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.id);
 
@@ -147,6 +150,7 @@ export const remove = mutation({
         id: v.id("lessons"),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.id);
 
@@ -177,6 +181,7 @@ export const bulkCreate = mutation({
         }))
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const lesson of args.lessons) {
@@ -199,6 +204,7 @@ export const generateMore = mutation({
         count: v.number(),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const group = await ctx.db.get(args.groupId);
         if (!group) return;
@@ -302,6 +308,7 @@ export const syncFromSchedule = mutation({
         groupId: v.optional(v.id("groups")),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         const groupsToSync = args.groupId

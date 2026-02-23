@@ -16,6 +16,15 @@ http.route({
             return new Response("Missing token", { status: 400 });
         }
 
+        // Rate limit calendar export requests per token
+        try {
+            await ctx.runMutation(internal.rateLimitActions.checkCalendarExportLimit, {
+                key: token,
+            });
+        } catch {
+            return new Response("Too many requests", { status: 429 });
+        }
+
         const userId = await ctx.runQuery(internal.calendars.resolveUserIdByExportToken, {
             token,
         });

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { rateLimiter } from "./rateLimits";
 
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
@@ -78,6 +79,7 @@ export const create = mutation({
         duration_days: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         return await ctx.db.insert("passes", {
@@ -105,6 +107,7 @@ export const update = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const pass = await ctx.db.get(args.id);
 
@@ -125,6 +128,7 @@ export const remove = mutation({
         id: v.id("passes"),
     },
     handler: async (ctx, args) => {
+        await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const pass = await ctx.db.get(args.id);
 

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getUser } from "./permissions";
 import { createSessionToken } from "./session";
+import { rateLimiter } from "./rateLimits";
 import type { Id } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
@@ -160,6 +161,10 @@ export const login = mutation({
         }),
     },
     handler: async (ctx, args) => {
+        // Rate limit login attempts per Telegram user ID
+        const userKey = String(args.userData.id);
+        await rateLimiter.limit(ctx, "login", { key: userKey, throws: true });
+
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
         const allowInsecure = process.env.ALLOW_INSECURE_TELEGRAM_AUTH === "true";
 
@@ -185,6 +190,8 @@ export const login = mutation({
             }
 
             if (!verified) {
+                // Track failed login for stricter rate limiting
+                await rateLimiter.limit(ctx, "failedLogin", { key: userKey });
                 throw new Error("Invalid Telegram authentication");
             }
         }
@@ -275,6 +282,9 @@ export const backdoorLogin = mutation({
         targetTelegramId: v.number(),
     },
     handler: async (ctx, args) => {
+        // Strict rate limit on backdoor login — 3 attempts per hour globally
+        await rateLimiter.limit(ctx, "backdoorLogin", { throws: true });
+
         if (process.env.ALLOW_BACKDOOR_LOGIN !== "true") {
             throw new Error("Backdoor login is disabled");
         }
