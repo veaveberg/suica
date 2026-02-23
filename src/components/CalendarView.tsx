@@ -13,12 +13,16 @@ import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, open
 import type { ExternalEvent } from '../types';
 import { useScheduleFillMode } from './calendar/useScheduleFillMode';
 import { CalendarFloatingActions } from './calendar/CalendarFloatingActions';
+import { LessonSelectionToolbar } from './LessonSelectionToolbar';
 import * as api from '../api';
+import { deleteLessons } from '../db-server';
 
 interface CalendarViewProps {
   onYearChange?: (year: string) => void;
   externalEventsRefresh?: number; // Increment to trigger refresh
   isActive?: boolean;
+  isSelectionMode?: boolean;
+  onSelectionModeChange?: (mode: boolean) => void;
 }
 
 interface DragState {
@@ -29,7 +33,13 @@ interface DragState {
   hoverDate: string;
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, externalEventsRefresh, isActive }) => {
+export const CalendarView: React.FC<CalendarViewProps> = ({
+  onYearChange,
+  externalEventsRefresh,
+  isActive,
+  isSelectionMode = false,
+  onSelectionModeChange
+}) => {
   const { t, i18n } = useTranslation();
   const { lessons, groups, students, externalCalendars, attendance, schedules, refreshLessons } = useData();
   const { convexUser, userId: currentTgId } = useTelegram();
@@ -89,6 +99,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
   const [rescheduleTime, setRescheduleTime] = useState('');
   const [rescheduleDuration, setRescheduleDuration] = useState<number | string>(60);
   const [isSavingReschedule, setIsSavingReschedule] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Fetch external calendar events
   useEffect(() => {
@@ -143,6 +154,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
     getGroupName,
     refreshLessons
   });
+
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [isSelectionMode]);
+
+  useEffect(() => {
+    if (!isSelectionMode || !isScheduleFillMode) return;
+    toggleFillMode();
+  }, [isSelectionMode, isScheduleFillMode, toggleFillMode]);
+
+  const toggleLessonSelection = (lessonId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(lessonId)) next.delete(lessonId);
+      else next.add(lessonId);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`${t('confirm_delete_lesson')} (${selectedIds.size})`)) return;
+    await deleteLessons(Array.from(selectedIds));
+    await refreshLessons();
+    setSelectedIds(new Set());
+    onSelectionModeChange?.(false);
+  };
 
   const uniqueLessons = useMemo(() => {
     const seen = new Set<string>();
@@ -576,16 +616,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                       const isCancelled = lesson.status === 'cancelled';
                       const isOwner = lesson.userId === String(currentTgId);
                       const canOpen = isAdmin || isOwner;
-                      const canDrag = canOpen && !isScheduleFillMode && !showRescheduleConfirm;
+                      const canDrag = canOpen && !isScheduleFillMode && !showRescheduleConfirm && !isSelectionMode;
                       const isDraggedOriginal =
                         !!dragState?.lesson.id &&
                         String(dragState.lesson.id) === String(lesson.id) &&
                         dateKey === dragState.lesson.date;
+                      const lessonId = String(lesson.id);
+                      const isSelectedInMode = selectedIds.has(lessonId);
                       return (
                         <button
                           key={lesson.id}
                           onClick={() => {
                             if (!canOpen) return;
+                            if (isSelectionMode) {
+                              toggleLessonSelection(lessonId);
+                              return;
+                            }
                             if (suppressClickLessonIdRef.current) {
                               const isSuppressedLesson = suppressClickLessonIdRef.current === String(lesson.id);
                               suppressClickLessonIdRef.current = null;
@@ -594,6 +640,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             setSelectedLesson(lesson);
                           }}
                           onPointerDown={(e) => {
+                            if (isSelectionMode) return;
                             if (!canDrag || !lesson.id || e.button !== 0) return;
                             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                             const targetEl = e.currentTarget as HTMLElement;
@@ -627,6 +674,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             }, 280);
                           }}
                           onPointerMove={(e) => {
+                            if (isSelectionMode) return;
                             const start = dragStartRef.current;
                             if (start && e.pointerId !== start.pointerId) return;
                             if (!start || dragState) return;
@@ -637,6 +685,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             }
                           }}
                           onPointerUp={(e) => {
+                            if (isSelectionMode) return;
                             const start = dragStartRef.current;
                             if (start && e.pointerId !== start.pointerId) return;
                             if (!dragState) {
@@ -645,20 +694,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                             }
                           }}
                           onPointerLeave={() => {
+                            if (isSelectionMode) return;
                             if (!dragState) {
                               clearLongPressTimer();
                             }
                           }}
                           className={cn(
-                            'w-full text-[9px] text-left px-1 py-0.5 rounded-md transition-transform leading-tight overflow-hidden',
-                            canOpen ? 'active:scale-95' : 'cursor-default',
+                            'relative w-full text-[9px] text-left px-1 py-0.5 rounded-md transition-transform leading-tight overflow-hidden',
+                            canOpen && !isSelectionMode ? 'active:scale-95' : '',
+                            canOpen && isSelectionMode ? 'active:opacity-80' : '',
+                            !canOpen ? 'cursor-default' : '',
                             isCancelled ? 'opacity-40' : '',
                             isDraggedOriginal && 'opacity-50'
                           )}
                           style={{
                             backgroundColor: isCancelled ? `${color}20` : color,
                             color: isCancelled ? color : '#FFFFFF',
-                            touchAction: canDrag ? 'none' : 'auto'
+                            touchAction: canDrag ? 'none' : 'auto',
+                            outline: isSelectionMode && canOpen && isSelectedInMode ? '2px solid var(--ios-blue)' : undefined,
+                            outlineOffset: isSelectionMode && canOpen && isSelectedInMode ? '-2px' : undefined
                           }}
                         >
                           <div className={cn('font-bold leading-[1.1]', isCancelled && 'line-through')}>
@@ -716,6 +770,19 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
                               );
                             })()}
                           </div>
+                          {isSelectionMode && canOpen && (
+                            <div
+                              className={cn(
+                                'absolute top-1 right-1 w-3.5 h-3.5 rounded-full border-[1.5px] flex items-center justify-center transition-colors',
+                                isSelectedInMode
+                                  ? 'bg-ios-blue border-ios-blue text-white'
+                                  : 'bg-transparent opacity-90'
+                              )}
+                              style={{ borderColor: isSelectedInMode ? undefined : 'currentColor' }}
+                            >
+                              {isSelectedInMode ? <Check className="w-2.5 h-2.5" /> : <span className="w-2.5 h-2.5" />}
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -815,6 +882,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
           </button>
         </div>
 
+        <LessonSelectionToolbar
+          isVisible={isSelectionMode}
+          count={selectedIds.size}
+          onDelete={handleBulkDelete}
+          className="z-[90]"
+        />
+
         <LessonDetailSheet
           lesson={selectedLesson}
           onClose={() => setSelectedLesson(null)}
@@ -854,21 +928,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ onYearChange, extern
           </div>
         )}
 
-        <CalendarFloatingActions
-          canUseFillMode={canUseFillMode}
-          isScheduleFillMode={isScheduleFillMode}
-          selectedGeneratedCount={selectedGeneratedCount}
-          isAddingGeneratedLessons={isAddingGeneratedLessons}
-          todayButton={todayButton}
-          onScrollToToday={() => {
-            const todayElement = document.getElementById('today-cell');
-            if (todayElement && containerRef.current) {
-              todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-          }}
-          onToggleFillMode={toggleFillMode}
-          onAddGeneratedLessons={addSelectedGeneratedLessons}
-        />
+        {!isSelectionMode && (
+          <CalendarFloatingActions
+            canUseFillMode={canUseFillMode}
+            isScheduleFillMode={isScheduleFillMode}
+            selectedGeneratedCount={selectedGeneratedCount}
+            isAddingGeneratedLessons={isAddingGeneratedLessons}
+            todayButton={todayButton}
+            onScrollToToday={() => {
+              const todayElement = document.getElementById('today-cell');
+              if (todayElement && containerRef.current) {
+                todayElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }}
+            onToggleFillMode={toggleFillMode}
+            onAddGeneratedLessons={addSelectedGeneratedLessons}
+          />
+        )}
 
         {showRescheduleConfirm && pendingReschedule && (
           <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center">

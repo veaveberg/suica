@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, Ban, Users, Circle, Trash2, ArrowUp, ArrowDown, Loader2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Ban, Users, Circle, ArrowUp, ArrowDown, Loader2, AlertTriangle } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import type { Lesson, Student } from '../types';
 import { LessonDetailSheet } from './LessonDetailSheet';
@@ -11,6 +11,7 @@ import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting
 import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
 import { useSearchParams } from '../hooks/useSearchParams';
 import type { ExternalEvent } from '../types';
+import { LessonSelectionToolbar } from './LessonSelectionToolbar';
 
 interface DashboardProps {
     students: Student[];
@@ -594,25 +595,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                 </div>
             </div>
 
-            {/* Selection Toolbar */}
-            {isSelectionMode && !isStudent && (
-                <div className="fixed bottom-20 left-4 right-4 z-50 animate-in slide-in-from-bottom-5 duration-300">
-                    <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-gray-200 dark:border-zinc-800 rounded-3xl p-4 shadow-2xl flex items-center justify-between">
-                        <div className="flex flex-col">
-                            <span className="text-xs font-black text-ios-gray uppercase tracking-widest">{t('lessons_selected')}</span>
-                            <span className="text-xl font-bold dark:text-white">{selectedIds.size}</span>
-                        </div>
-                        <button
-                            onClick={handleBulkDelete}
-                            disabled={selectedIds.size === 0}
-                            className="flex items-center gap-2 px-6 py-3 bg-ios-red text-white rounded-2xl font-bold active:scale-95 transition-transform disabled:opacity-50"
-                        >
-                            <Trash2 className="w-5 h-5" />
-                            {t('delete_lesson')}
-                        </button>
-                    </div>
-                </div>
-            )}
+            <LessonSelectionToolbar
+                isVisible={isSelectionMode && !isStudent}
+                count={selectedIds.size}
+                onDelete={handleBulkDelete}
+            />
 
             <LessonDetailSheet
                 lesson={selectedLesson}

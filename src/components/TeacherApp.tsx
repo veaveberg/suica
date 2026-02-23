@@ -125,7 +125,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                     )}
                 </h1>
                 <div className="flex items-center gap-2">
-                    {activeTab === 'classes' && (
+                    {(activeTab === 'classes' || activeTab === 'calendar') && (
                         <button
                             onClick={() => setIsSelectionMode(!isSelectionMode)}
                             className="text-ios-blue font-semibold px-2 active:opacity-50 transition-opacity"
@@ -171,6 +171,8 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                         onYearChange={setCalendarYearDisplay}
                         externalEventsRefresh={externalCalendarsRefresh}
                         isActive={activeTab === 'calendar'}
+                        isSelectionMode={isSelectionMode}
+                        onSelectionModeChange={setIsSelectionMode}
                     />
                 </div>
 
