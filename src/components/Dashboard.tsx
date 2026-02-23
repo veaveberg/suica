@@ -106,7 +106,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
 
     const handleBulkDelete = async () => {
         if (selectedIds.size === 0) return;
-        if (confirm(`${t('confirm_delete_lesson')} (${selectedIds.size})`)) {
+        const confirmKey = selectedIds.size > 1 ? 'confirm_delete_lessons' : 'confirm_delete_lesson';
+        if (confirm(t(confirmKey))) {
             await deleteLessons(Array.from(selectedIds));
             await refreshLessons();
             if (onSelectionModeChange) onSelectionModeChange(false);

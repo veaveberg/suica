@@ -177,7 +177,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`${t('confirm_delete_lesson')} (${selectedIds.size})`)) return;
+    const confirmKey = selectedIds.size > 1 ? 'confirm_delete_lessons' : 'confirm_delete_lesson';
+    if (!confirm(t(confirmKey))) return;
     await deleteLessons(Array.from(selectedIds));
     await refreshLessons();
     setSelectedIds(new Set());
