@@ -52,6 +52,7 @@ export default defineSchema({
         price: v.number(),
         purchase_date: v.string(),
         expiry_date: v.optional(v.string()),
+        is_paid: v.optional(v.boolean()),
         is_consecutive: v.boolean(),
         duration_days: v.optional(v.number()),
         status: v.union(v.literal("active"), v.literal("archived")),

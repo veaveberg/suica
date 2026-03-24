@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 
-import { ChevronDown, ChevronRight, Archive, Instagram } from 'lucide-react';
+import { ChevronDown, ChevronRight, Archive, Instagram, Plus } from 'lucide-react';
 import { TelegramIcon } from './Icons';
 import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
@@ -12,6 +12,8 @@ import { useMemo } from 'react';
 import { getScheduleSummary } from '../utils/formatting';
 import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import { useSearchParams } from '../hooks/useSearchParams';
+import { createGroup } from '../db-server';
+import { GROUP_COLORS } from '../constants/colors';
 
 export const GroupsView: React.FC = () => {
     const { t, i18n } = useTranslation();
@@ -21,9 +23,7 @@ export const GroupsView: React.FC = () => {
     const isStudentGlobal = convexUser?.role === 'student';
     const isAdmin = convexUser?.role === 'admin';
 
-    const isCreating = getParam('sheet') === 'create_group';
-
-    const { groups, schedules, students, studentGroups, subscriptions, attendance, lessons } = useData();
+    const { groups, schedules, students, studentGroups, subscriptions, attendance, lessons, refreshAll } = useData();
 
     // Calculate enrolled group IDs for everyone (including Teachers who are students)
     const enrolledGroupIds = useMemo(() => {
@@ -71,6 +71,36 @@ export const GroupsView: React.FC = () => {
 
     const isOwner = selectedGroup?.userId === String(currentTgId);
     const shouldShowAudit = selectedGroup && !isAdmin && (isStudentGlobal || !isOwner);
+
+    const handleCreateGroup = async () => {
+        const ownedGroupNames = new Set(
+            groups
+                .filter(g => g.userId === String(currentTgId))
+                .map(g => g.name.trim().toLowerCase())
+        );
+
+        let nextIndex = 1;
+        let nextName = 'New Group';
+        while (ownedGroupNames.has(nextName.toLowerCase())) {
+            nextIndex += 1;
+            nextName = `New Group ${nextIndex}`;
+        }
+
+        const usedColors = new Set(
+            groups
+                .filter(g => g.userId === String(currentTgId))
+                .map(g => g.color)
+        );
+        const nextColor = GROUP_COLORS.find(color => !usedColors.has(color)) || GROUP_COLORS[0];
+
+        try {
+            const groupId = await createGroup(nextName, nextColor);
+            await refreshAll();
+            setParam('groupId', String(groupId));
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Failed to create group');
+        }
+    };
 
     // ... existing auditData ...
     const auditData = useMemo(() => {
@@ -127,6 +157,17 @@ export const GroupsView: React.FC = () => {
 
     return (
         <div className="p-4">
+            {!isStudentGlobal && (
+                <div className="mb-6">
+                    <button
+                        onClick={handleCreateGroup}
+                        className="w-full flex items-center justify-center gap-2 p-4 bg-ios-blue/10 text-ios-blue rounded-2xl font-semibold active:scale-[0.98] transition-transform"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>{t('create_group')}</span>
+                    </button>
+                </div>
+            )}
 
             {/* Active Groups */}
             {/* Active Groups Section */}
@@ -269,7 +310,7 @@ export const GroupsView: React.FC = () => {
                     });
                 })()}
 
-                {activeGroups.length === 0 && !isCreating && (
+                {activeGroups.length === 0 && (
                     <div className="text-center py-12 text-ios-gray">
                         <p>{t('no_groups')}</p>
                     </div>

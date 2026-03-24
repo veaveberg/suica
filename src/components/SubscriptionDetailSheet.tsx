@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Trash2, Clock, Calendar, ChevronsRight } from 'lucide-react';
+import { Trash2, Clock, Calendar, ChevronsRight, Check } from 'lucide-react';
 import { useData } from '../DataProvider';
 import type { Subscription } from '../types';
 import * as api from '../api';
@@ -21,6 +21,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
     const [durationDays, setDurationDays] = useState('');
     const [isConsecutive, setIsConsecutive] = useState(false);
     const [expiryDate, setExpiryDate] = useState<string | undefined>('');
+    const [isPaid, setIsPaid] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
@@ -31,6 +32,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             setDurationDays(String(subscription.duration_days || ''));
             setIsConsecutive(subscription.is_consecutive || false);
             setExpiryDate(subscription.expiry_date);
+            setIsPaid(subscription.is_paid !== false);
             setIsDeleting(false);
         }
     }, [subscription, isOpen]);
@@ -66,6 +68,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             duration_days: !isConsecutive ? Number(durationDays) : undefined,
             is_consecutive: isConsecutive,
             expiry_date: expiryDate,
+            is_paid: isPaid,
             status: newStatus
         });
 
@@ -167,6 +170,28 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                             </div>
                             <div className={`w-12 h-7 rounded-full p-1 transition-colors ${isConsecutive ? "bg-ios-green" : "bg-gray-300 dark:bg-zinc-700"}`}>
                                 <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${isConsecutive ? "translate-x-5" : "translate-x-0"}`} />
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={() => setIsPaid(!isPaid)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isPaid ? 'bg-ios-green/10 text-ios-green' : 'bg-yellow-400/15 text-yellow-600 dark:text-yellow-300'}`}>
+                                    <Check className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <span className="font-medium dark:text-white">{t('paid')}</span>
+                                    {!isPaid && (
+                                        <div className="text-xs text-yellow-600 dark:text-yellow-300">
+                                            {t('unpaid')}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isPaid ? 'bg-ios-green border-ios-green' : 'border-gray-300 dark:border-zinc-600'}`}>
+                                <Check className={`w-4 h-4 text-white ${!isPaid ? 'invisible' : ''}`} />
                             </div>
                         </button>
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, UserPlus, Archive, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import * as api from '../api';
@@ -100,6 +100,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
             <div className="space-y-2">
                 {activeStudents.map(student => {
                     const studentGroupsList = getStudentGroups(student.id!);
+                    const hasUnpaidPass = subscriptions.some(sub => {
+                        const isStudentSub = String(sub.user_id) === String(student.id);
+                        const isActive = sub.status === 'active' || !sub.status;
+                        const isNotExpired = !sub.expiry_date || sub.expiry_date >= new Date().toISOString().split('T')[0];
+                        return isStudentSub && isActive && isNotExpired && sub.is_paid === false;
+                    });
 
                     return (
                         <button
@@ -110,6 +116,11 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                             <div className="flex-1">
                                 <div className="flex items-baseline gap-2">
                                     <h3 className="font-bold dark:text-white group-active:text-ios-blue">{student.name}</h3>
+                                    {hasUnpaidPass && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-yellow-600 dark:text-yellow-300">
+                                            <AlertTriangle className="w-3.5 h-3.5" />
+                                        </span>
+                                    )}
                                     {student.telegram_username && (
                                         <span className="text-xs text-ios-gray">@{student.telegram_username}</span>
                                     )}

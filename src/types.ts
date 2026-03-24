@@ -71,6 +71,7 @@ export interface Subscription {
   price: number;
   purchase_date: string;
   expiry_date?: string;
+  is_paid?: boolean;
   is_consecutive: boolean;
   duration_days?: number;
   status: 'active' | 'archived';

@@ -499,6 +499,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                                     showChevron={true}
                                                     startDate={sub.purchase_date}
                                                     endDate={sub.expiry_date}
+                                                    warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
                                                 />
                                             );
                                         })}
@@ -547,6 +548,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                                             showChevron={true}
                                                             startDate={sub.purchase_date}
                                                             endDate={sub.expiry_date}
+                                                            warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
                                                         />
                                                     );
                                                 })}

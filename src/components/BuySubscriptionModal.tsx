@@ -82,6 +82,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
             price: price,
             purchase_date: purchaseDate,
             expiry_date: expiryDate,
+            is_paid: true,
             is_consecutive: pass.is_consecutive || false,
             duration_days: pass.duration_days,
             status: 'active'

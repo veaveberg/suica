@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, Sparkles } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Sparkles } from 'lucide-react';
 import type { Pass, Group } from '../types';
 import { getPassDisplayName } from '../utils/passUtils';
 import { cn } from '../utils/cn';
@@ -15,6 +15,7 @@ interface PassCardProps {
     totalLessons?: number;
     startDate?: string;
     endDate?: string;
+    warningLabel?: string;
 }
 
 export const PassCard: React.FC<PassCardProps> = ({
@@ -26,7 +27,8 @@ export const PassCard: React.FC<PassCardProps> = ({
     hasDiscount = false,
     totalLessons,
     startDate,
-    endDate
+    endDate,
+    warningLabel
 }) => {
     const { t, i18n } = useTranslation();
     const displayPrice = priceOverride !== undefined ? priceOverride : pass.price;
@@ -88,6 +90,12 @@ export const PassCard: React.FC<PassCardProps> = ({
                                 {displayPrice} ₾
                             </span>
                         </div>
+                        {warningLabel && (
+                            <div className="inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>{warningLabel}</span>
+                            </div>
+                        )}
                         {groupsList.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                                 {groupsList.map(g => (
