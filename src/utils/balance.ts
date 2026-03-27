@@ -193,9 +193,6 @@ export function calculateStudentGroupBalanceWithAudit(
         if (pass.expiry_date && pass.expiry_date < today && lessonDate >= today) return false;
         return true;
     };
-    const hasConsecutivePassForDate = (lessonDate: string): boolean =>
-        sortedPasses.some(pass => pass.is_consecutive && passCoversDate(pass, lessonDate));
-
     // Track remaining capacity per pass and usage
     const passCapacity = new Map<string, number>();
     const passUsageMap = new Map<string, number>();
@@ -203,6 +200,12 @@ export function calculateStudentGroupBalanceWithAudit(
         passCapacity.set(pass.id!, pass.lessons_total);
         passUsageMap.set(pass.id!, 0);
     }
+    const hasRemainingConsecutivePassForDate = (lessonDate: string): boolean =>
+        sortedPasses.some(pass =>
+            pass.is_consecutive &&
+            passCoversDate(pass, lessonDate) &&
+            (passCapacity.get(pass.id!) || 0) > 0
+        );
 
     let lessonsCovered = 0;
 
@@ -211,7 +214,7 @@ export function calculateStudentGroupBalanceWithAudit(
         const autoConsumeConsecutive =
             !attendanceRecord &&
             lesson.date < today &&
-            hasConsecutivePassForDate(lesson.date);
+            hasRemainingConsecutivePassForDate(lesson.date);
 
         // Ignore lessons without explicit attendance unless they should auto-consume a consecutive pass
         if (!attendanceRecord && !autoConsumeConsecutive) {
