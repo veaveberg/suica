@@ -26,6 +26,28 @@ function getTodayLocalDate(): string {
     return `${year}-${month}-${day}`;
 }
 
+function withNonBreakingSpaces(value: string): string {
+    return value.replace(/ /g, '\u00A0');
+}
+
+function keepRangeBoundaryTight(value: string): string {
+    return value.replace(/ – /g, ' –\u200B');
+}
+
+function getDaysLeftLabel(remainingDays: number, totalDays: number, lang: string, t: (key: string, options?: any) => string): string {
+    const upperLang = lang.toUpperCase();
+
+    if (upperLang === 'RU') {
+        return `Осталось ${remainingDays}\u00A0${t('days', { count: remainingDays })}\u00A0из\u00A0${totalDays}`;
+    }
+
+    if (upperLang === 'KA') {
+        return `დარჩა ${remainingDays}\u00A0${t('days', { count: remainingDays })} ${totalDays}-დან`;
+    }
+
+    return `${remainingDays}\u00A0${t('days', { count: remainingDays })} left out of ${totalDays}`;
+}
+
 interface PassCardProps {
     pass: Pass;
     groupsList: Group[];
@@ -61,15 +83,14 @@ export const PassCard: React.FC<PassCardProps> = ({
     const nextUnusedSegmentStart = totalLessons && pass.lessons_count > 0
         ? Math.min(Math.max((usedLessons / totalLessons) * 100, 0), 100)
         : null;
-    const usageMeta = [
+    const usageMetaParts = [
         pass.name?.trim() ? pass.name.trim() : undefined,
         startDate && endDate
-            ? formatDateRange(startDate, endDate, i18n)
+            ? withNonBreakingSpaces(keepRangeBoundaryTight(formatDateRange(startDate, endDate, i18n)))
             : startDate
-                ? formatDate(startDate, i18n, { includeWeekday: false })
+                ? withNonBreakingSpaces(formatDate(startDate, i18n, { includeWeekday: false }))
                 : endDateText,
-        `${pass.price} ₾`
-    ].filter(Boolean).join(', ');
+    ].filter(Boolean);
     const canShowDayBar = !pass.is_consecutive && !!pass.duration_days;
     const totalDays = canShowDayBar ? pass.duration_days! : 0;
     const today = getTodayLocalDate();
@@ -86,6 +107,9 @@ export const PassCard: React.FC<PassCardProps> = ({
     const ringRadius = 7;
     const ringCircumference = 2 * Math.PI * ringRadius;
     const ringOffset = ringCircumference * (1 - remainingDaysPercent / 100);
+    const daysLeftLabel = canShowDayBar
+        ? getDaysLeftLabel(remainingDays, totalDays, i18n.language, t)
+        : '';
 
     return (
         <CardComponent
@@ -105,16 +129,26 @@ export const PassCard: React.FC<PassCardProps> = ({
                                         {endDateText}
                                     </div>
                                 )}
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0 text-sm text-black dark:text-white truncate">
-                                            {usageMeta}
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1 text-sm text-black dark:text-white leading-snug whitespace-normal break-words">
+                                        {usageMetaParts.map((part, index) => (
+                                            <span key={`${part}-${index}`}>
+                                                {part}
+                                                {index < usageMetaParts.length - 1 ? ', ' : ''}
+                                            </span>
+                                        ))}
+                                        {usageMetaParts.length > 0 && <span>, </span>}
+                                        <span className={warningLabel ? 'text-yellow-600 dark:text-yellow-300' : ''}>
+                                            {withNonBreakingSpaces(`${pass.price} ₾`)}
+                                            {warningLabel ? ' ⚠️' : ''}
+                                        </span>
                                     </div>
                                     {canShowDayBar && (
-                                        <div className="shrink-0 flex items-center gap-1">
-                                            <div className="text-[10px] font-medium text-ios-gray text-right whitespace-nowrap">
-                                                {t('days_left_out_of_total', { remaining: remainingDays, total: totalDays })}
+                                        <div className="min-w-0 max-w-[45%] flex items-center justify-end gap-1 self-start">
+                                            <div className="min-w-0 text-[10px] font-medium text-ios-gray text-right leading-tight whitespace-normal break-words">
+                                                {daysLeftLabel}
                                             </div>
-                                            <div className="relative h-4 w-4">
+                                            <div className="relative top-px h-4 w-4 flex-shrink-0">
                                                 <svg className="h-4 w-4 -rotate-90" viewBox="0 0 20 20" aria-hidden="true">
                                                     <circle
                                                         cx="10"
@@ -141,12 +175,6 @@ export const PassCard: React.FC<PassCardProps> = ({
                                         </div>
                                     )}
                                 </div>
-                                {warningLabel && (
-                                    <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">
-                                        <AlertTriangle className="h-3 w-3" />
-                                        <span>{warningLabel}</span>
-                                    </div>
-                                )}
                             </div>
 
                             <div className="mt-2">

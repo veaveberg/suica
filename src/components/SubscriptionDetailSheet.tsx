@@ -78,7 +78,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             newStatus = 'active';
         }
 
-        const payload: Omit<Subscription, 'id'> = {
+        const createPayload: Omit<Subscription, 'id'> = {
             user_id: subscription.user_id,
             group_id: subscription.group_id,
             tariff_id: subscription.tariff_id,
@@ -94,11 +94,21 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
         };
 
         if (subscription.id) {
-            await api.update<Subscription>('subscriptions', subscription.id, payload);
+            await api.update<Subscription>('subscriptions', subscription.id, {
+                price: Number(price),
+                lessons_total: Number(lessonsTotal),
+                purchase_date: purchaseDate,
+                duration_days: !isConsecutive ? Number(durationDays) : undefined,
+                is_consecutive: isConsecutive,
+                expiry_date: expiryDate,
+                is_paid: isPaid,
+                status: newStatus,
+                type: subscription.type
+            });
         } else if (onCreate) {
-            await onCreate(payload);
+            await onCreate(createPayload);
         } else {
-            await api.create<Subscription>('subscriptions', payload);
+            await api.create<Subscription>('subscriptions', createPayload);
         }
 
         await refreshSubscriptions();
