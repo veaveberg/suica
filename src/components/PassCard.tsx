@@ -31,7 +31,11 @@ function withNonBreakingSpaces(value: string): string {
 }
 
 function keepRangeBoundaryTight(value: string): string {
-    return value.replace(/ – /g, ' –\u200B');
+    const parts = value.split(' – ');
+    if (parts.length !== 2) return withNonBreakingSpaces(value);
+
+    const [start, end] = parts;
+    return `${withNonBreakingSpaces(start)}\u00A0– ${withNonBreakingSpaces(end)}`;
 }
 
 function getDaysLeftLabel(remainingDays: number, totalDays: number, lang: string, t: (key: string, options?: any) => string): string {
@@ -86,7 +90,7 @@ export const PassCard: React.FC<PassCardProps> = ({
     const usageMetaParts = [
         pass.name?.trim() ? pass.name.trim() : undefined,
         startDate && endDate
-            ? withNonBreakingSpaces(keepRangeBoundaryTight(formatDateRange(startDate, endDate, i18n)))
+            ? keepRangeBoundaryTight(formatDateRange(startDate, endDate, i18n))
             : startDate
                 ? withNonBreakingSpaces(formatDate(startDate, i18n, { includeWeekday: false }))
                 : endDateText,
