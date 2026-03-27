@@ -18,7 +18,7 @@ interface StudentCardProps {
     student: Student | null;
     subscriptions: Subscription[];
     onClose: () => void;
-    onBuySubscription: (sub: Omit<Subscription, 'id'>) => void;
+    onBuySubscription: (sub: Omit<Subscription, 'id'>) => Promise<Subscription>;
     readOnly?: boolean;
 }
 
@@ -166,6 +166,13 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             console.error('Failed to restore student:', error);
             alert('Failed to restore student');
         }
+    };
+
+    const handleBuySubscription = async (sub: Omit<Subscription, 'id'>): Promise<Subscription> => {
+        const createdSub = await onBuySubscription(sub);
+        setIsBuyModalOpen(false);
+        setEditingSub(createdSub);
+        return createdSub;
     };
 
     const today = new Date().toISOString().split('T')[0];
@@ -615,7 +622,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 isOpen={isBuyModalOpen}
                 student={student}
                 onClose={() => setIsBuyModalOpen(false)}
-                onBuy={onBuySubscription}
+                onBuy={handleBuySubscription}
             />
 
             {

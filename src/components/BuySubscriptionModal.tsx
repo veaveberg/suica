@@ -10,7 +10,7 @@ interface BuySubscriptionModalProps {
     isOpen: boolean;
     student: Student;
     onClose: () => void;
-    onBuy: (subscription: Omit<Subscription, 'id'>) => void;
+    onBuy: (subscription: Omit<Subscription, 'id'>) => Promise<Subscription>;
 }
 
 export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
@@ -45,7 +45,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         return associatedGroupIds.includes(String(selectedGroupId));
     });
 
-    const handleBuy = (pass: Pass) => {
+    const handleBuy = async (pass: Pass) => {
         let expiryDate: string | undefined = undefined;
 
         if (!(pass.is_consecutive || false) && pass.duration_days) {
@@ -54,7 +54,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
             expiryDate = expiry.toISOString().split('T')[0];
         }
 
-        onBuy({
+        await onBuy({
             user_id: student.id!,
             group_id: selectedGroupId,
             tariff_id: String(pass.id),
@@ -68,7 +68,6 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
             duration_days: pass.duration_days,
             status: 'active'
         });
-        onClose();
     };
 
     return (

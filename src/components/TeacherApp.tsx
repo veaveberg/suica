@@ -83,9 +83,10 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     }
     const selectedGroup = groups.find(g => String(g.id) === groupIdParam) || null
 
-    const handleBuySubscription = async (newSub: Omit<Subscription, 'id'>) => {
-        await api.create<Subscription>('subscriptions', newSub);
+    const handleBuySubscription = async (newSub: Omit<Subscription, 'id'>): Promise<Subscription> => {
+        const createdSub = await api.create<Subscription>('subscriptions', newSub);
         await refreshSubscriptions();
+        return createdSub;
     };
     const [isSelectionMode, setIsSelectionMode] = useState(false)
     const [calendarYearDisplay, setCalendarYearDisplay] = useState('')
