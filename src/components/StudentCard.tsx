@@ -614,7 +614,6 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             <BuySubscriptionModal
                 isOpen={isBuyModalOpen}
                 student={student}
-                activeSubscriptions={allSubscriptions}
                 onClose={() => setIsBuyModalOpen(false)}
                 onBuy={onBuySubscription}
             />

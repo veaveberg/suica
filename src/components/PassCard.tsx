@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, ChevronRight, Sparkles } from 'lucide-react';
+import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { Pass, Group } from '../types';
 import { getPassDisplayName } from '../utils/passUtils';
 import { cn } from '../utils/cn';
@@ -10,8 +10,6 @@ interface PassCardProps {
     groupsList: Group[];
     onClick?: () => void;
     showChevron?: boolean;
-    priceOverride?: number;
-    hasDiscount?: boolean;
     totalLessons?: number;
     startDate?: string;
     endDate?: string;
@@ -23,15 +21,12 @@ export const PassCard: React.FC<PassCardProps> = ({
     groupsList,
     onClick,
     showChevron = true,
-    priceOverride,
-    hasDiscount = false,
     totalLessons,
     startDate,
     endDate,
     warningLabel
 }) => {
     const { t, i18n } = useTranslation();
-    const displayPrice = priceOverride !== undefined ? priceOverride : pass.price;
 
     const isInteractive = !!onClick;
     const CardComponent = isInteractive ? 'button' : 'div';
@@ -76,19 +71,8 @@ export const PassCard: React.FC<PassCardProps> = ({
                         {getPassDisplayName({ ...pass, lessons_total: totalLessons }, t)}
                     </h3>
                     <div className="mt-1 flex items-center flex-wrap gap-2">
-                        {hasDiscount && (
-                            <div className="flex items-center gap-1 text-[8px] text-ios-green font-bold uppercase">
-                                <Sparkles className="w-2.5 h-2.5" />
-                                {t('price_with_discount')}
-                            </div>
-                        )}
                         <div className="flex items-center gap-2">
-                            {hasDiscount && (
-                                <span className="text-sm text-ios-gray line-through">{pass.price} ₾</span>
-                            )}
-                            <span className={`text-sm font-bold ${hasDiscount ? 'text-ios-green' : 'text-ios-gray'}`}>
-                                {displayPrice} ₾
-                            </span>
+                            <span className="text-sm font-bold text-ios-gray">{pass.price} ₾</span>
                         </div>
                         {warningLabel && (
                             <div className="inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">

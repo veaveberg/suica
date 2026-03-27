@@ -9,7 +9,6 @@ import { getPassDisplayName } from '../utils/passUtils';
 interface BuySubscriptionModalProps {
     isOpen: boolean;
     student: Student;
-    activeSubscriptions: Subscription[];
     onClose: () => void;
     onBuy: (subscription: Omit<Subscription, 'id'>) => void;
 }
@@ -17,7 +16,6 @@ interface BuySubscriptionModalProps {
 export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
     isOpen,
     student,
-    activeSubscriptions,
     onClose,
     onBuy
 }) => {
@@ -38,8 +36,6 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
     }, [groups, selectedGroupId]);
 
     if (!isOpen) return null;
-
-
     // Filter passes that are linked to the selected group via pass_groups
     const filteredPasses = passes.filter(pass => {
         const associatedGroupIds = passGroups
@@ -49,22 +45,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         return associatedGroupIds.includes(String(selectedGroupId));
     });
 
-
-    // Check if student already has an active subscription for the first group (to apply discount)
-    const hasActiveSubForMainGroup = groups.length > 0 && activeSubscriptions.some(
-        s => s.group_id === groups[0].id?.toString() && s.lessons_total > 0
-    );
-
-    const getPrice = (pass: Pass) => {
-        // Apply discount if student has active subscription for the main group
-        if (hasActiveSubForMainGroup && selectedGroupId !== groups[0]?.id?.toString()) {
-            return Math.round(pass.price * 0.85); // 15% discount
-        }
-        return pass.price;
-    };
-
     const handleBuy = (pass: Pass) => {
-        const price = getPrice(pass);
         let expiryDate: string | undefined = undefined;
 
         if (!(pass.is_consecutive || false) && pass.duration_days) {
@@ -79,7 +60,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
             tariff_id: String(pass.id),
             type: getPassDisplayName(pass, t),
             lessons_total: pass.lessons_count,
-            price: price,
+            price: pass.price,
             purchase_date: purchaseDate,
             expiry_date: expiryDate,
             is_paid: true,
@@ -148,8 +129,6 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
                             groupsList={groups.filter(g => String(g.id) === String(selectedGroupId))}
                             onClick={() => handleBuy(pass)}
                             showChevron={false}
-                            priceOverride={getPrice(pass)}
-                            hasDiscount={getPrice(pass) < pass.price}
                         />
                     ))}
 
