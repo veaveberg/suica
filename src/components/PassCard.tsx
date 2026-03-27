@@ -4,6 +4,27 @@ import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { Pass, Group } from '../types';
 import { getPassDisplayName } from '../utils/passUtils';
 import { cn } from '../utils/cn';
+import { formatDate, formatDateRange } from '../utils/formatting';
+
+function parseDateString(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
+function getInclusiveDayDiff(startDateStr: string, endDateStr: string): number {
+    const start = parseDateString(startDateStr);
+    const end = parseDateString(endDateStr);
+    const diffMs = end.getTime() - start.getTime();
+    return Math.max(Math.floor(diffMs / 86400000) + 1, 0);
+}
+
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 interface PassCardProps {
     pass: Pass;
@@ -13,6 +34,8 @@ interface PassCardProps {
     totalLessons?: number;
     startDate?: string;
     endDate?: string;
+    endDateText?: string;
+    endDatePending?: boolean;
     warningLabel?: string;
 }
 
@@ -24,117 +47,201 @@ export const PassCard: React.FC<PassCardProps> = ({
     totalLessons,
     startDate,
     endDate,
+    endDateText,
+    endDatePending,
     warningLabel
 }) => {
     const { t, i18n } = useTranslation();
 
     const isInteractive = !!onClick;
     const CardComponent = isInteractive ? 'button' : 'div';
+    const isUsageCard = typeof totalLessons === 'number' && totalLessons > 0;
+    const usedLessons = totalLessons ? Math.max(totalLessons - pass.lessons_count, 0) : 0;
+    const usageAccentColor = groupsList.length > 0 ? groupsList[0].color : '#34C759';
+    const nextUnusedSegmentStart = totalLessons && pass.lessons_count > 0
+        ? Math.min(Math.max((usedLessons / totalLessons) * 100, 0), 100)
+        : null;
+    const usageMeta = [
+        pass.name?.trim() ? pass.name.trim() : undefined,
+        startDate && endDate
+            ? formatDateRange(startDate, endDate, i18n)
+            : startDate
+                ? formatDate(startDate, i18n, { includeWeekday: false })
+                : endDateText,
+        `${pass.price} ₾`
+    ].filter(Boolean).join(', ');
+    const canShowDayBar = !pass.is_consecutive && !!pass.duration_days;
+    const totalDays = canShowDayBar ? pass.duration_days! : 0;
+    const today = getTodayLocalDate();
+    const remainingDays = canShowDayBar
+        ? (startDate && endDate
+            ? (today <= endDate
+                ? getInclusiveDayDiff(today > startDate ? today : startDate, endDate)
+                : 0)
+            : totalDays)
+        : 0;
+    const remainingDaysPercent = canShowDayBar && totalDays > 0
+        ? Math.min(Math.max((remainingDays / totalDays) * 100, 0), 100)
+        : 0;
+    const ringRadius = 7;
+    const ringCircumference = 2 * Math.PI * ringRadius;
+    const ringOffset = ringCircumference * (1 - remainingDaysPercent / 100);
 
     return (
         <CardComponent
             onClick={onClick}
             className={cn(
-                "w-full bg-ios-card dark:bg-zinc-900 p-4 rounded-2xl flex items-center justify-between shadow-sm transition-transform text-left border border-gray-100 dark:border-zinc-800",
+                "w-full bg-ios-card dark:bg-zinc-900 px-4 py-2.5 rounded-2xl shadow-sm transition-transform text-left border border-gray-100 dark:border-zinc-800",
                 isInteractive ? "active:scale-[0.98] cursor-pointer" : "cursor-text scale-100 select-text"
             )}
         >
-            <div className="flex items-center gap-4 min-w-0">
-                {/* Postage Stamp Icon */}
-                <div
-                    className="w-16 h-12 flex-shrink-0 flex items-center justify-center relative rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.4)] overflow-hidden"
-                    style={{
-                        background: groupsList.length === 0
-                            ? '#8E8E93'
-                            : groupsList.length === 1
-                                ? groupsList[0].color
-                                : `linear-gradient(to bottom, ${groupsList.map(g => g.color).join(', ')})`,
-                        backgroundClip: 'padding-box'
-                    }}
-                >
-                    {/* Seamless Inner Border */}
-                    <div className="absolute inset-0 border-2 border-white/30 rounded-xl z-20 pointer-events-none" />
-
-                    {/* Premium Overlays */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent opacity-40 z-10" />
-                    <div className="absolute inset-0 shadow-[inset_0_0_8px_rgba(0,0,0,0.3)] rounded-lg z-10" />
-
-                    {/* Strong Stamp Texture */}
-                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[length:5px_5px] z-10" />
-
-                    <span className={`${totalLessons ? 'text-lg' : 'text-2xl'} font-black text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] z-30`}>
-                        {totalLessons ? `${pass.lessons_count}/${totalLessons}` : pass.lessons_count}
-                    </span>
-                </div>
-                <div className="min-w-0">
-                    <h3 className="font-semibold text-lg dark:text-white truncate">
-                        {getPassDisplayName({ ...pass, lessons_total: totalLessons }, t)}
-                    </h3>
-                    <div className="mt-1 flex items-center flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-ios-gray">{pass.price} ₾</span>
-                        </div>
-                        {warningLabel && (
-                            <div className="inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">
-                                <AlertTriangle className="h-3 w-3" />
-                                <span>{warningLabel}</span>
-                            </div>
-                        )}
-                        {groupsList.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                                {groupsList.map(g => (
-                                    <span
-                                        key={g.id}
-                                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
-                                        style={{
-                                            color: g.color,
-                                            backgroundColor: `${g.color}15`
-                                        }}
-                                    >
-                                        {g.name}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                        {(startDate || endDate) && (() => {
-                            const formatDate = (dateStr: string) => {
-                                const [y, m, d] = dateStr.split('-').map(Number);
-                                const date = new Date(y, m - 1, d);
-                                const lang = i18n.language.toUpperCase();
-                                let options: Intl.DateTimeFormatOptions;
-
-                                if (lang === 'KA') {
-                                    options = { day: 'numeric', month: 'long' };
-                                } else if (lang === 'RU') {
-                                    options = { weekday: 'short', day: 'numeric', month: 'long' };
-                                } else {
-                                    options = { weekday: 'short', month: 'long', day: 'numeric' };
-                                }
-
-                                const locale = lang === 'KA' ? 'ka-GE' : lang === 'RU' ? 'ru' : 'en-US';
-                                return date.toLocaleDateString(locale, options);
-                            };
-
-                            const startFormatted = startDate ? formatDate(startDate) : '';
-                            const endFormatted = endDate ? formatDate(endDate) : '';
-
-                            return (
-                                <div className="w-full mt-1">
-                                    <div className="text-sm text-ios-gray">
-                                        {startDate && endDate
-                                            ? `${startFormatted} – ${endFormatted}`
-                                            : startDate
-                                                ? t('from_only', { date: startFormatted })
-                                                : endFormatted
-                                        }
+            {isUsageCard ? (
+                <>
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="min-w-0">
+                                {endDateText && !endDate && (
+                                    <div className={cn("text-sm mb-0.5", endDatePending ? "text-ios-red" : "text-ios-gray")}>
+                                        {endDateText}
                                     </div>
+                                )}
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="min-w-0 text-sm text-black dark:text-white truncate">
+                                            {usageMeta}
+                                    </div>
+                                    {canShowDayBar && (
+                                        <div className="shrink-0 flex items-center gap-1">
+                                            <div className="text-[10px] font-medium text-ios-gray text-right whitespace-nowrap">
+                                                {t('days_left_out_of_total', { remaining: remainingDays, total: totalDays })}
+                                            </div>
+                                            <div className="relative h-4 w-4">
+                                                <svg className="h-4 w-4 -rotate-90" viewBox="0 0 20 20" aria-hidden="true">
+                                                    <circle
+                                                        cx="10"
+                                                        cy="10"
+                                                        r={ringRadius}
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        className="text-ios-gray/25 dark:text-zinc-700"
+                                                    />
+                                                    <circle
+                                                        cx="10"
+                                                        cy="10"
+                                                        r={ringRadius}
+                                                        fill="none"
+                                                        stroke={usageAccentColor}
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeDasharray={ringCircumference}
+                                                        strokeDashoffset={ringOffset}
+                                                    />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            );
-                        })()}
+                                {warningLabel && (
+                                    <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">
+                                        <AlertTriangle className="h-3 w-3" />
+                                        <span>{warningLabel}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-2">
+                                <div className="flex gap-1.5">
+                                    {Array.from({ length: totalLessons }, (_, index) => (
+                                        <div
+                                            key={index}
+                                            className={cn(
+                                                "h-1.5 flex-1 rounded-full transition-colors",
+                                                index < usedLessons
+                                                    ? "bg-gray-300 dark:bg-zinc-700"
+                                                    : ""
+                                            )}
+                                            style={index < usedLessons ? undefined : { backgroundColor: usageAccentColor }}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="relative h-4 mt-0.5">
+                                    <span className="absolute left-0 text-[11px] font-semibold text-ios-gray">
+                                        {totalLessons}
+                                    </span>
+                                    {nextUnusedSegmentStart !== null && (
+                                        <span
+                                            className="absolute top-0 text-[11px] font-semibold text-black dark:text-white whitespace-nowrap"
+                                            style={{ left: `${nextUnusedSegmentStart}%` }}
+                                        >
+                                            {pass.lessons_count}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        {showChevron && <ChevronRight className="w-5 h-5 text-ios-gray/30 flex-shrink-0 mt-0.5" />}
                     </div>
-                </div>
-            </div>
-            {showChevron && <ChevronRight className="w-5 h-5 text-ios-gray/30 flex-shrink-0" />}
+                </>
+            ) : (
+                <>
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-4 min-w-0">
+                            <div
+                                className="w-16 h-12 flex-shrink-0 flex items-center justify-center relative rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.4)] overflow-hidden"
+                                style={{
+                                    background: groupsList.length === 0
+                                        ? '#8E8E93'
+                                        : groupsList.length === 1
+                                            ? groupsList[0].color
+                                            : `linear-gradient(to bottom, ${groupsList.map(g => g.color).join(', ')})`,
+                                    backgroundClip: 'padding-box'
+                                }}
+                            >
+                                <div className="absolute inset-0 border-2 border-white/30 rounded-xl z-20 pointer-events-none" />
+                                <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent opacity-40 z-10" />
+                                <div className="absolute inset-0 shadow-[inset_0_0_8px_rgba(0,0,0,0.3)] rounded-lg z-10" />
+                                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[length:5px_5px] z-10" />
+                                <span className="text-2xl font-black text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.4)] z-30">
+                                    {pass.lessons_count}
+                                </span>
+                            </div>
+                            <div className="min-w-0">
+                                <h3 className="font-semibold text-lg dark:text-white truncate">
+                                    {getPassDisplayName({ ...pass, lessons_total: totalLessons }, t)}
+                                </h3>
+                                <div className="mt-1 flex items-center flex-wrap gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-ios-gray">{pass.price} ₾</span>
+                                    </div>
+                                    {warningLabel && (
+                                        <div className="inline-flex items-center gap-1 rounded-md bg-yellow-400/15 px-2 py-1 text-[10px] font-bold uppercase text-yellow-700 dark:text-yellow-300">
+                                            <AlertTriangle className="h-3 w-3" />
+                                            <span>{warningLabel}</span>
+                                        </div>
+                                    )}
+                                    {groupsList.length > 0 && (
+                                        <div className="flex flex-wrap gap-1">
+                                            {groupsList.map(g => (
+                                                <span
+                                                    key={g.id}
+                                                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-md"
+                                                    style={{
+                                                        color: g.color,
+                                                        backgroundColor: `${g.color}15`
+                                                    }}
+                                                >
+                                                    {g.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        {showChevron && <ChevronRight className="w-5 h-5 text-ios-gray/30 flex-shrink-0 mt-1" />}
+                    </div>
+                </>
+            )}
         </CardComponent>
     );
 };

@@ -112,16 +112,30 @@ export const update = mutation({
 
         const patch: any = { ...args.updates };
 
+        if (args.updates.telegram_username !== undefined) {
+            patch.telegram_username = args.updates.telegram_username.trim() || undefined;
+        }
+
+        if (args.updates.instagram_username !== undefined) {
+            patch.instagram_username = args.updates.instagram_username.trim() || undefined;
+        }
+
+        if (args.updates.notes !== undefined) {
+            patch.notes = args.updates.notes.trim() || undefined;
+        }
+
         // If username is being updated, try to link to existing user
-        if (args.updates.telegram_username) {
+        if (patch.telegram_username) {
             const existingUser = await ctx.db
                 .query("users")
-                .withIndex("by_username", (q) => q.eq("username", args.updates.telegram_username))
+                .withIndex("by_username", (q) => q.eq("username", patch.telegram_username))
                 .first();
 
             if (existingUser) {
                 patch.telegram_id = existingUser.tokenIdentifier;
             }
+        } else if (args.updates.telegram_username !== undefined) {
+            patch.telegram_id = undefined;
         }
 
         await ctx.db.patch(args.id, patch);

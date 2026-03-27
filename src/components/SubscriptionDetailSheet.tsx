@@ -5,13 +5,32 @@ import { useData } from '../DataProvider';
 import type { Subscription } from '../types';
 import * as api from '../api';
 
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateString(dateStr: string, days: number): string {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + Math.max(days - 1, 0));
+    const nextYear = date.getFullYear();
+    const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const nextDay = String(date.getDate()).padStart(2, '0');
+    return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
 interface SubscriptionDetailSheetProps {
     isOpen: boolean;
     onClose: () => void;
     subscription: Subscription;
+    onCreate?: (subscription: Omit<Subscription, 'id'>) => Promise<Subscription>;
 }
 
-export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = ({ isOpen, onClose, subscription }) => {
+export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = ({ isOpen, onClose, subscription, onCreate }) => {
     const { t, i18n } = useTranslation();
     const { refreshSubscriptions } = useData();
 
@@ -40,9 +59,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
     // Update expiry date whenever purchase date or duration changes
     useEffect(() => {
         if (!isConsecutive && purchaseDate && durationDays) {
-            const expiry = new Date(purchaseDate);
-            expiry.setDate(expiry.getDate() + Number(durationDays));
-            setExpiryDate(expiry.toISOString().split('T')[0]);
+            setExpiryDate(addDaysToDateString(purchaseDate, Number(durationDays)));
         } else if (isConsecutive) {
             setExpiryDate(undefined);
         }
@@ -51,7 +68,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
     if (!isOpen) return null;
 
     const handleSave = async () => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayLocalDate();
         let newStatus = subscription.status;
 
         // Archive if expired, reactivate if valid date
@@ -61,7 +78,11 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             newStatus = 'active';
         }
 
-        await api.update<Subscription>('subscriptions', subscription.id!, {
+        const payload: Omit<Subscription, 'id'> = {
+            user_id: subscription.user_id,
+            group_id: subscription.group_id,
+            tariff_id: subscription.tariff_id,
+            type: subscription.type,
             price: Number(price),
             lessons_total: Number(lessonsTotal),
             purchase_date: purchaseDate,
@@ -70,7 +91,15 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             expiry_date: expiryDate,
             is_paid: isPaid,
             status: newStatus
-        });
+        };
+
+        if (subscription.id) {
+            await api.update<Subscription>('subscriptions', subscription.id, payload);
+        } else if (onCreate) {
+            await onCreate(payload);
+        } else {
+            await api.create<Subscription>('subscriptions', payload);
+        }
 
         await refreshSubscriptions();
         onClose();
@@ -95,7 +124,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                 <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-zinc-800 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl sticky top-0 z-10">
                     <button onClick={onClose} className="text-ios-blue font-medium">{t('cancel')}</button>
                     <h2 className="text-lg font-bold dark:text-white">
-                        {t('edit')} {subscription.type}
+                        {subscription.id ? `${t('edit')} ${subscription.type}` : t('buy_subscription')}
                     </h2>
                     <button
                         onClick={handleSave}
@@ -237,16 +266,18 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                     </div>
 
                     {/* Delete Section */}
-                    <button
-                        onClick={handleDelete}
-                        className={`w-full flex items-center justify-center gap-2 p-4 rounded-2xl font-bold transition-all ${isDeleting
-                            ? "bg-ios-red text-white scale-[0.98]"
-                            : "bg-ios-red/10 text-ios-red"
-                            }`}
-                    >
-                        <Trash2 className="w-5 h-5" />
-                        <span>{isDeleting ? t('confirm_delete') : t('delete')}</span>
-                    </button>
+                    {subscription.id && (
+                        <button
+                            onClick={handleDelete}
+                            className={`w-full flex items-center justify-center gap-2 p-4 rounded-2xl font-bold transition-all ${isDeleting
+                                ? "bg-ios-red text-white scale-[0.98]"
+                                : "bg-ios-red/10 text-ios-red"
+                                }`}
+                        >
+                            <Trash2 className="w-5 h-5" />
+                            <span>{isDeleting ? t('confirm_delete') : t('delete')}</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

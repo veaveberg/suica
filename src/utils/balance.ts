@@ -1,6 +1,14 @@
 import * as api from '../api';
 import type { Attendance, Subscription, Lesson, AttendanceStatus } from '../types';
 
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 export interface StudentBalance {
     balance: number;  // positive = surplus, negative = debt
     lessonsOwed: number;
@@ -79,7 +87,7 @@ export function calculateStudentGroupBalanceWithAudit(
 ): BalanceAuditResult {
     const auditEntries: BalanceAuditEntry[] = [];
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDate();
     // Get all passes for this student+group
     const studentPasses = subscriptions.filter(s =>
         String(s.user_id) === String(studentId) &&
@@ -143,7 +151,7 @@ export function calculateStudentGroupBalanceWithAudit(
             }
 
             // Spending status with no pass = debt
-            if (attendanceRecord.status === 'present') {
+            if (attendanceRecord.status === 'present' || attendanceRecord.status === 'absence_invalid') {
                 lessonsOwed++;
                 uncoveredLessons.push({
                     lessonId: String(lesson.id),
@@ -157,15 +165,6 @@ export function calculateStudentGroupBalanceWithAudit(
                     attendanceStatus: attendanceRecord.status,
                     status: 'counted',
                     reason: 'uncovered_no_matching_pass'
-                });
-            } else if (attendanceRecord.status === 'absence_invalid') {
-                auditEntries.push({
-                    lessonId: String(lesson.id),
-                    lessonDate: lesson.date,
-                    lessonTime: lesson.time,
-                    attendanceStatus: attendanceRecord.status,
-                    status: 'not_counted',
-                    reason: 'not_counted_no_attendance'
                 });
             }
         }
@@ -409,7 +408,7 @@ export function calculateStudentBalance(
  * Checks all active subscriptions and archives those that have expired.
  */
 export async function checkAndArchiveExpired(subscriptions: Subscription[]): Promise<boolean> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDate();
     const expired = subscriptions.filter(s =>
         (s.status === 'active' || !s.status) &&
         s.expiry_date &&

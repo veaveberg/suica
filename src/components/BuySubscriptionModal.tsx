@@ -6,23 +6,43 @@ import type { Subscription, Student, Pass } from '../types';
 import { PassCard } from './PassCard';
 import { getPassDisplayName } from '../utils/passUtils';
 
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function addDaysToDateString(dateStr: string, days: number): string {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + Math.max(days - 1, 0));
+    const nextYear = date.getFullYear();
+    const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const nextDay = String(date.getDate()).padStart(2, '0');
+    return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
 interface BuySubscriptionModalProps {
     isOpen: boolean;
     student: Student;
     onClose: () => void;
     onBuy: (subscription: Omit<Subscription, 'id'>) => Promise<Subscription>;
+    initialGroupId?: string;
 }
 
 export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
     isOpen,
     student,
     onClose,
-    onBuy
+    onBuy,
+    initialGroupId
 }) => {
     const { t } = useTranslation();
     const [selectedGroupId, setSelectedGroupId] = useState<string>('');
 
-    const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+    const [purchaseDate, setPurchaseDate] = useState(getTodayLocalDate());
 
     // Fetch groups, passes and passGroups from context
     const { groups: allGroups, passes, passGroups } = useData();
@@ -30,10 +50,15 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
 
     // Set default group when groups load
     useEffect(() => {
+        if (initialGroupId && groups.some(group => String(group.id) === String(initialGroupId))) {
+            setSelectedGroupId(initialGroupId);
+            return;
+        }
+
         if (groups.length > 0 && !selectedGroupId) {
             setSelectedGroupId(groups[0].id?.toString() || '');
         }
-    }, [groups, selectedGroupId]);
+    }, [groups, selectedGroupId, initialGroupId]);
 
     if (!isOpen) return null;
     // Filter passes that are linked to the selected group via pass_groups
@@ -49,9 +74,7 @@ export const BuySubscriptionModal: React.FC<BuySubscriptionModalProps> = ({
         let expiryDate: string | undefined = undefined;
 
         if (!(pass.is_consecutive || false) && pass.duration_days) {
-            const expiry = new Date(purchaseDate);
-            expiry.setDate(expiry.getDate() + pass.duration_days);
-            expiryDate = expiry.toISOString().split('T')[0];
+            expiryDate = addDaysToDateString(purchaseDate, pass.duration_days);
         }
 
         await onBuy({

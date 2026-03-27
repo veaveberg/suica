@@ -1,6 +1,14 @@
 
 import type { Doc } from "./_generated/dataModel";
 
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 export interface LessonRevenueInfo {
     cost: number;
     equation: string;
@@ -16,7 +24,7 @@ export function calculateRevenuePerLesson(
     attendance: Doc<"attendance">[]
 ): Map<string, LessonRevenueInfo> {
     const revenueMap = new Map<string, LessonRevenueInfo>();
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDate();
 
     // 1. Filter and Sort Passes
     const passes = subscriptions
@@ -180,7 +188,7 @@ export function calculateRevenuePerLesson(
                 cost,
                 equation,
                 usedPassId: coveredBy._id,
-                isEstimated: lesson.date > new Date().toISOString()
+                isEstimated: lesson.date > today
             });
         }
     }

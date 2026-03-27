@@ -42,6 +42,39 @@ export function formatDate(dateStr: string, i18n: i18n, options: FormatDateOptio
 }
 
 /**
+ * Formats a compact date range.
+ * Examples:
+ * EN: "February 10 – March 5", "March 10–19"
+ * RU: "10 февраля – 5 марта", "10–19 марта"
+ */
+export function formatDateRange(startDateStr: string, endDateStr: string, i18n: i18n): string {
+    const [startY, startM, startD] = startDateStr.split('-').map(Number);
+    const [endY, endM, endD] = endDateStr.split('-').map(Number);
+    const startDate = new Date(startY, startM - 1, startD);
+    const endDate = new Date(endY, endM - 1, endD);
+    const lang = i18n.language.toUpperCase();
+    const locale = getLocale(lang);
+
+    const sameYear = startY === endY;
+    const sameMonth = sameYear && startM === endM;
+
+    if (sameMonth) {
+        if (lang === 'EN') {
+            const month = startDate.toLocaleDateString(locale, { month: 'long' });
+            return `${month} ${startD}\u2013${endD}`;
+        }
+
+        const monthParts = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).formatToParts(endDate);
+        const month = monthParts.find(part => part.type === 'month')?.value || endDate.toLocaleDateString(locale, { month: 'long' });
+        return `${startD}\u2013${endD} ${month}`;
+    }
+
+    const startFormatted = formatDate(startDateStr, i18n, { includeWeekday: false });
+    const endFormatted = formatDate(endDateStr, i18n, { includeWeekday: false });
+    return `${startFormatted} \u2013 ${endFormatted}`;
+}
+
+/**
  * Formats a time range given start time and duration in minutes.
  * Returns format like "10–11:30"
  */

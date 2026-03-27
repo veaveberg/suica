@@ -8,6 +8,14 @@ import type { Student, Subscription } from '../types';
 import { calculateStudentGroupBalance } from '../utils/balance';
 import { useSearchParams } from '../hooks/useSearchParams';
 
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 interface StudentsViewProps {
     students: Student[];
     subscriptions: Subscription[];
@@ -26,6 +34,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
     const { groups, studentGroups, refreshStudents, attendance, lessons } = useData();
     const activeGroups = groups.filter(g => g.status === 'active');
+    const today = getTodayLocalDate();
 
     // Filter out completely empty ghost students and apply search
     const filteredStudents = students
@@ -103,7 +112,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
                     const hasUnpaidPass = subscriptions.some(sub => {
                         const isStudentSub = String(sub.user_id) === String(student.id);
                         const isActive = sub.status === 'active' || !sub.status;
-                        const isNotExpired = !sub.expiry_date || sub.expiry_date >= new Date().toISOString().split('T')[0];
+                        const isNotExpired = !sub.expiry_date || sub.expiry_date >= today;
                         return isStudentSub && isActive && isNotExpired && sub.is_paid === false;
                     });
 

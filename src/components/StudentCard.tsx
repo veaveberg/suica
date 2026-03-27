@@ -1,17 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, AlertCircle, Layers, Instagram, CreditCard, ChevronDown, ChevronUp, ChevronRight, Trash2, Archive, RotateCcw } from 'lucide-react';
-import type { Subscription, Student, Group } from '../types';
-import { BuySubscriptionModal } from './BuySubscriptionModal';
+import { X, Plus, AlertCircle, Instagram, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, CheckCircle2, XCircle, Calendar } from 'lucide-react';
+import type { Subscription, Student, Lesson } from '../types';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
-import { BalanceAuditSheet } from './BalanceAuditSheet';
+import { LessonDetailSheet } from './LessonDetailSheet';
 import { PassCard } from './PassCard';
 import { useData } from '../DataProvider';
-import { addStudentToGroup, removeStudentFromGroup, archiveStudent, restoreStudent } from '../db-server';
+import { addStudentToGroup, archiveStudent, restoreStudent } from '../db-server';
 import * as api from '../api';
 import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit } from '../utils/balance';
-import type { BalanceAuditResult } from '../utils/balance';
+import type { BalanceAuditEntry, AuditReason } from '../utils/balance';
+import { getConsecutiveSubscriptionExpiration } from '../utils/subscriptionDates';
 import { TelegramIcon } from './Icons';
+import { cn } from '../utils/cn';
+import { formatDate, formatTimeRange } from '../utils/formatting';
+import { getPassDisplayName } from '../utils/passUtils';
+
+function getTodayLocalDate(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
 
 interface StudentCardProps {
     isOpen: boolean;
@@ -25,14 +36,12 @@ interface StudentCardProps {
 export const StudentCard: React.FC<StudentCardProps> = ({
     isOpen,
     student,
-    subscriptions,
     onClose,
     onBuySubscription,
     readOnly = false
 }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
 
-    const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
     const [addingToGroup, setAddingToGroup] = useState(false);
     const [selectedGroupId, setSelectedGroupId] = useState('');
 
@@ -42,12 +51,14 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const [editInstagram, setEditInstagram] = useState('');
     const [editNotes, setEditNotes] = useState('');
     const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+    const [isPassPickerOpen, setIsPassPickerOpen] = useState(false);
+    const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [isArchiveOpen, setIsArchiveOpen] = useState(false);
-    const [auditingGroup, setAuditingGroup] = useState<{ groupId: string; group: Group; auditResult: BalanceAuditResult } | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [selectedFinanceGroupId, setSelectedFinanceGroupId] = useState<string | null>(null);
     const lastInitializedId = React.useRef<string | null>(null);
 
-    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, subscriptions: allSubscriptions, lessons, passes, attendance } = useData();
+    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, subscriptions: allSubscriptions, lessons, passes, passGroups, attendance } = useData();
     const activeGroups = allGroupsRaw.filter(g => g.status === 'active');
 
     // Reset edit state when student changes or sheet opens
@@ -60,38 +71,26 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 setEditInstagram(student.instagram_username || '');
                 setEditNotes(student.notes || '');
                 setEditingSub(null);
+                setIsPassPickerOpen(false);
                 setShowDeleteConfirm(false);
                 setAddingToGroup(false);
+                setSelectedFinanceGroupId(null);
                 lastInitializedId.current = student.id || null;
             }
         } else if (!isOpen) {
             lastInitializedId.current = null;
+            setIsPassPickerOpen(false);
             setShowDeleteConfirm(false);
             setAddingToGroup(false);
+            setSelectedFinanceGroupId(null);
         }
     }, [student, isOpen]);
 
-    // Keep audit result in sync with live data
-    useEffect(() => {
-        if (auditingGroup && student && student.id) {
-            const freshResult = calculateStudentGroupBalanceWithAudit(
-                student.id, auditingGroup.groupId, allSubscriptions, attendance, lessons
-            );
-            // Check if result actually changed to avoid unnecessary re-renders
-            if (JSON.stringify(freshResult) !== JSON.stringify(auditingGroup.auditResult)) {
-                setAuditingGroup(prev => prev ? { ...prev, auditResult: freshResult } : null);
-            }
-        }
-    }, [attendance, allSubscriptions, lessons, student, auditingGroup?.groupId]);
-
-    if (!student) return null;
-
-    const memberAssignments = studentGroups.filter(sg => String(sg.student_id) === String(student.id));
+    const memberAssignments = studentGroups.filter(sg => String(sg.student_id) === String(student?.id));
     const memberGroupIds = memberAssignments.map(a => String(a.group_id));
-    const studentGroupsList = activeGroups.filter(g => memberGroupIds.includes(String(g.id)));
 
     const handleAddToGroup = async () => {
-        if (selectedGroupId && student.id) {
+        if (selectedGroupId && student?.id) {
             await addStudentToGroup(student.id, selectedGroupId);
             await refreshStudentGroups();
             setAddingToGroup(false);
@@ -100,16 +99,18 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     };
 
     const handleSave = async () => {
+        if (!student?.id) return;
+
         if (!editName.trim()) {
             await handleCancel(); // If name is cleared, treat as cancel/delete if it was empty
             return;
         }
 
-        await api.update<Student>('students', student.id!, {
+        await api.update<Student>('students', student.id, {
             name: editName.trim(),
-            telegram_username: editTelegram.replace(/@/g, '').trim() || undefined,
-            instagram_username: editInstagram.replace(/@/g, '').trim() || undefined,
-            notes: editNotes.trim() || undefined
+            telegram_username: editTelegram.replace(/@/g, '').trim(),
+            instagram_username: editInstagram.replace(/@/g, '').trim(),
+            notes: editNotes.trim()
         });
 
         await refreshStudents();
@@ -124,7 +125,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             !editInstagram.trim() &&
             !editNotes.trim();
 
-        if (student.id && isEmpty) {
+        if (student?.id && isEmpty) {
             await api.remove('students', student.id);
             await refreshStudents();
         }
@@ -133,7 +134,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     };
 
     const handleDelete = async () => {
-        if (!student.id) return;
+        if (!student?.id) return;
         try {
             await api.remove('students', student.id);
             await refreshStudents();
@@ -145,7 +146,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     };
 
     const handleArchive = async () => {
-        if (!student.id) return;
+        if (!student?.id) return;
         try {
             await archiveStudent(student.id);
             await refreshStudents();
@@ -157,7 +158,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     };
 
     const handleRestore = async () => {
-        if (!student.id) return;
+        if (!student?.id) return;
         try {
             await restoreStudent(student.id);
             await refreshStudents();
@@ -170,32 +171,257 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
     const handleBuySubscription = async (sub: Omit<Subscription, 'id'>): Promise<Subscription> => {
         const createdSub = await onBuySubscription(sub);
-        setIsBuyModalOpen(false);
-        setEditingSub(createdSub);
         return createdSub;
     };
 
-    const today = new Date().toISOString().split('T')[0];
-    const studentIdStr = String(student.id);
-    const isArchived = student.status === 'archived';
+    const handleStartSubscriptionDraft = (passId: string) => {
+        if (!student?.id || !selectedFinanceGroup) return;
 
-    // In the new balance-based system, active passes are those that are not archived/expired
-    const activeSubs = allSubscriptions.filter(s => {
-        const isStudent = String(s.user_id) === studentIdStr;
-        const isActive = s.status === 'active' || !s.status;
-        const isNotExpired = !s.expiry_date || today <= s.expiry_date;
-        return isStudent && isActive && isNotExpired;
-    });
+        const pass = passes.find(item => String(item.id) === String(passId));
+        if (!pass) return;
 
-    const historySubs = allSubscriptions.filter(s => {
-        const isStudent = String(s.user_id) === studentIdStr;
-        const isArchivedSub = s.status === 'archived';
-        const isExpired = s.expiry_date && s.expiry_date < today;
-        // Show in history if it's explicitly archived OR if it's expired
-        return isStudent && (isArchivedSub || isExpired);
-    });
+        const purchaseDate = getTodayLocalDate();
+        const expiryDate = !pass.is_consecutive && pass.duration_days
+            ? (() => {
+                const [year, month, day] = purchaseDate.split('-').map(Number);
+                const date = new Date(year, month - 1, day);
+                date.setDate(date.getDate() + Math.max(pass.duration_days - 1, 0));
+                const nextYear = date.getFullYear();
+                const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+                const nextDay = String(date.getDate()).padStart(2, '0');
+                return `${nextYear}-${nextMonth}-${nextDay}`;
+            })()
+            : undefined;
+
+        setEditingSub({
+            user_id: student.id,
+            group_id: String(selectedFinanceGroup.id),
+            tariff_id: String(pass.id),
+            type: getPassDisplayName(pass, t),
+            lessons_total: pass.lessons_count,
+            price: pass.price,
+            purchase_date: purchaseDate,
+            expiry_date: expiryDate,
+            is_paid: true,
+            is_consecutive: pass.is_consecutive || false,
+            duration_days: pass.duration_days,
+            status: 'active'
+        });
+        setIsPassPickerOpen(false);
+    };
+
+    const today = getTodayLocalDate();
+    const studentIdStr = String(student?.id ?? '');
+    const isArchived = student?.status === 'archived';
+
+    const studentSubs = allSubscriptions.filter(s => String(s.user_id) === studentIdStr);
+
+    const transactionGroupIds = new Set<string>();
+    allSubscriptions
+        .filter(s => String(s.user_id) === String(student?.id))
+        .forEach(s => transactionGroupIds.add(String(s.group_id)));
+    attendance
+        .filter(a => String(a.student_id) === String(student?.id))
+        .forEach(a => {
+            const lesson = lessons.find(l => String(l.id) === String(a.lesson_id));
+            if (lesson) transactionGroupIds.add(String(lesson.group_id));
+        });
+
+    const financeTabGroups = allGroupsRaw.filter(group =>
+        memberGroupIds.includes(String(group.id)) || transactionGroupIds.has(String(group.id))
+    );
+
+    useEffect(() => {
+        if (financeTabGroups.length === 0) {
+            if (selectedFinanceGroupId !== null) setSelectedFinanceGroupId(null);
+            return;
+        }
+
+        const hasSelectedGroup = selectedFinanceGroupId &&
+            financeTabGroups.some(group => String(group.id) === String(selectedFinanceGroupId));
+
+        if (!hasSelectedGroup) {
+            setSelectedFinanceGroupId(String(financeTabGroups[0].id));
+        }
+    }, [financeTabGroups, selectedFinanceGroupId]);
+
+    const selectedFinanceGroup = financeTabGroups.find(group => String(group.id) === String(selectedFinanceGroupId)) || null;
+    const selectedFinanceBalance = selectedFinanceGroup && student?.id
+        ? calculateStudentGroupBalance(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons).balance
+        : 0;
+    const selectedFinanceAudit = selectedFinanceGroup && student?.id
+        ? calculateStudentGroupBalanceWithAudit(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons)
+        : null;
+    const selectedGroupSubs = selectedFinanceGroup
+        ? studentSubs.filter(sub => String(sub.group_id) === String(selectedFinanceGroup.id))
+        : [];
+    const selectedPassUsageById = new Map(
+        (selectedFinanceAudit?.passUsage || []).map(item => [String(item.passId), item])
+    );
+    const selectedUsedSubs = selectedGroupSubs.filter(sub => {
+        const usage = selectedPassUsageById.get(String(sub.id));
+        const lessonsRemaining = usage
+            ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
+            : sub.lessons_total;
+        const isArchived = sub.status === 'archived';
+        const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
+        return isArchived || isExpired || lessonsRemaining === 0;
+    }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
+    const selectedActiveSubs = selectedGroupSubs.filter(sub => {
+        const usage = selectedPassUsageById.get(String(sub.id));
+        const lessonsRemaining = usage
+            ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
+            : sub.lessons_total;
+        const isArchived = sub.status === 'archived';
+        const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
+        return !isArchived && !isExpired && lessonsRemaining > 0;
+    }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
+    const selectedGroupPasses = selectedFinanceGroup
+        ? passes.filter(pass =>
+            passGroups.some(
+                passGroup =>
+                    String(passGroup.pass_id) === String(pass.id) &&
+                    String(passGroup.group_id) === String(selectedFinanceGroup.id)
+            )
+        )
+        : [];
+
+    const getReasonLabel = (reason: AuditReason): string => {
+        switch (reason) {
+            case 'counted_present':
+                return t('attendance_present') || 'Present';
+            case 'counted_absence_invalid':
+                return t('attendance_absence_invalid') || 'Invalid skip';
+            case 'counted_no_attendance_consecutive':
+                return t('reason_counted_no_attendance_consecutive') || 'Not marked (auto-counted)';
+            case 'not_counted_valid_skip':
+                return t('attendance_absence_valid') || 'Valid skip';
+            case 'not_counted_cancelled':
+                return t('cancelled') || 'Cancelled';
+            case 'not_counted_no_attendance':
+                return t('not_marked') || 'Not marked';
+            case 'uncovered_pass_depleted':
+                return t('reason_pass_depleted') || 'Pass depleted';
+            case 'uncovered_no_matching_pass':
+                return t('reason_no_matching_pass') || 'No pass';
+            default:
+                return reason;
+        }
+    };
+
+    const getSubscriptionCardDates = (sub: Subscription) => {
+        if (!sub.is_consecutive) {
+            return {
+                startDate: sub.purchase_date,
+                endDate: sub.expiry_date
+            };
+        }
+
+        const { expirationDate, missingLessons } = getConsecutiveSubscriptionExpiration(sub, lessons, attendance);
+
+        return {
+            startDate: sub.purchase_date,
+            endDate: expirationDate,
+            endDateText: !expirationDate && missingLessons > 0
+                ? t('lessons_not_assigned', { count: missingLessons })
+                : undefined,
+            endDatePending: !expirationDate
+        };
+    };
+
+    const coveredEntries = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.reason === 'counted_present' ||
+            entry.reason === 'counted_absence_invalid' ||
+            entry.reason === 'counted_no_attendance_consecutive'
+        )
+        : [];
+    const uncoveredEntries = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.reason === 'uncovered_pass_depleted' || entry.reason === 'uncovered_no_matching_pass'
+        )
+        : [];
+    const notCountedEntries = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.reason === 'not_counted_valid_skip' ||
+            entry.reason === 'not_counted_cancelled' ||
+            entry.reason === 'not_counted_no_attendance'
+        )
+        : [];
+    const totalPassCredit = selectedFinanceAudit
+        ? selectedFinanceAudit.passUsage.reduce((sum, passUsage) => sum + passUsage.lessonsTotal, 0)
+        : 0;
+
+    const LessonCard: React.FC<{ entry: BalanceAuditEntry }> = ({ entry }) => {
+        const sub = entry.coveredByPassId
+            ? allSubscriptions.find(subscription => subscription.id === entry.coveredByPassId)
+            : undefined;
+        const lesson = lessons.find(item => String(item.id) === entry.lessonId);
+        const isCounted = entry.status === 'counted';
+
+        return (
+            <button
+                onClick={() => lesson && setSelectedLesson(lesson)}
+                className={cn(
+                    "w-full px-4 py-3 rounded-2xl bg-ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800",
+                    "flex items-center justify-between active:scale-[0.98] transition-all text-left"
+                )}
+            >
+                <div className="flex flex-col min-w-0">
+                    <div className="font-bold dark:text-white text-base leading-tight">
+                        {formatDate(entry.lessonDate, i18n)}
+                    </div>
+                    <div className="text-xs text-ios-gray mt-0.5">
+                        {lesson ? formatTimeRange(entry.lessonTime, lesson.duration_minutes) : entry.lessonTime}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="text-right">
+                        <div className={cn(
+                            "text-sm font-bold",
+                            entry.attendanceStatus === 'present' ? 'text-ios-green' :
+                                entry.attendanceStatus === 'absence_invalid' ? 'text-ios-red' :
+                                    entry.attendanceStatus === 'absence_valid' ? 'text-ios-blue' :
+                                        entry.reason === 'counted_absence_invalid' || entry.reason === 'counted_no_attendance_consecutive'
+                                            ? 'text-ios-orange'
+                                            : 'text-ios-gray'
+                        )}>
+                            {entry.attendanceStatus === 'present' ? t('attendance_present') :
+                                entry.attendanceStatus === 'absence_invalid' ? t('attendance_absence_invalid') :
+                                    entry.attendanceStatus === 'absence_valid' ? t('attendance_absence_valid') :
+                                        entry.reason === 'counted_absence_invalid'
+                                            ? t('attendance_absence_invalid')
+                                            : getReasonLabel(entry.reason)}
+                        </div>
+
+                        {sub ? (
+                            <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
+                                {getPassDisplayName(sub, t)}
+                            </div>
+                        ) : (
+                            <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
+                                {getReasonLabel(entry.reason)}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-ios-background dark:bg-black border border-black/[0.03] dark:border-white/[0.03] shrink-0">
+                        <span className={cn(
+                            "text-sm font-black",
+                            isCounted ? "dark:text-white text-black" : "text-ios-gray opacity-40"
+                        )}>
+                            {isCounted ? "-1" : "0"}
+                        </span>
+                    </div>
+                </div>
+            </button>
+        );
+    };
 
     // handleDeleteSub and handleArchiveSub removed as they are now handled by SubscriptionDetailSheet
+
+    if (!student) return null;
 
     return (
         <>
@@ -319,226 +545,137 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             </section>
                         )}
 
-                        {/* Groups Section */}
-                        <section>
-                            <h3 className="text-[10px] font-black text-ios-gray uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
-                                <Layers className="w-3 h-3" />
-                                {t('groups')}
-                            </h3>
-
-                            <div className="flex flex-wrap gap-2">
-                                {studentGroupsList.map(group => (
-                                    <div
-                                        key={group.id}
-                                        className="flex items-center gap-2 px-3 py-2 bg-ios-background dark:bg-zinc-800 rounded-xl"
-                                    >
-                                        <div
-                                            className="w-3 h-3 rounded-full"
-                                            style={{ backgroundColor: group.color }}
-                                        />
-                                        <span className="text-sm font-medium dark:text-white">{group.name}</span>
-                                        {!readOnly && (
-                                            <button
-                                                onClick={async () => {
-                                                    await removeStudentFromGroup(student.id!, group.id!);
-                                                    await refreshStudentGroups();
-                                                }}
-                                                className="p-1 text-ios-gray hover:text-ios-red"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-
-                                {/* Add group button */}
-                                {!readOnly && !addingToGroup && (
-                                    <button
-                                        onClick={() => setAddingToGroup(true)}
-                                        className="flex items-center gap-1 px-3 py-2 bg-ios-background dark:bg-zinc-800 rounded-xl text-ios-blue active:scale-95 transition-transform"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                    </button>
-                                )}
-
-                                {addingToGroup && (
-                                    <div className="w-full p-3 bg-ios-background dark:bg-zinc-800 rounded-xl space-y-3">
-                                        <select
-                                            value={selectedGroupId}
-                                            onChange={(e) => setSelectedGroupId(e.target.value)}
-                                            className="w-full px-3 py-2 rounded-lg bg-ios-card dark:bg-zinc-700 dark:text-white"
-                                        >
-                                            <option value="">{t('select_group')}</option>
-                                            {activeGroups.map(g => {
-                                                const isAssigned = memberGroupIds.includes(String(g.id));
-                                                return (
-                                                    <option
-                                                        key={g.id}
-                                                        value={g.id}
-                                                        disabled={isAssigned}
-                                                    >
-                                                        {g.name}{isAssigned ? ` (${t('already_added') || 'added'})` : ''}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => setAddingToGroup(false)}
-                                                className="flex-1 py-2 rounded-lg bg-gray-200 dark:bg-zinc-600 dark:text-white text-sm"
-                                            >
-                                                {t('cancel')}
-                                            </button>
-                                            <button
-                                                onClick={handleAddToGroup}
-                                                disabled={!selectedGroupId}
-                                                className="flex-1 py-2 rounded-lg bg-ios-blue text-white font-semibold text-sm disabled:opacity-50"
-                                            >
-                                                {t('add')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </section>
-
-                        {/* Balance Section */}
-                        {student && student.id && (() => {
-                            // Get all groups the student has transactions in (passes or attendance)
-                            const studentGroupIds = new Set<string>();
-                            subscriptions
-                                .filter(s => String(s.user_id) === String(student.id))
-                                .forEach(s => studentGroupIds.add(String(s.group_id)));
-                            attendance
-                                .filter(a => String(a.student_id) === String(student.id))
-                                .forEach(a => {
-                                    const lesson = lessons.find(l => String(l.id) === String(a.lesson_id));
-                                    if (lesson) studentGroupIds.add(String(lesson.group_id));
-                                });
-
-                            // Show all groups with any transactions (don't filter by balance)
-                            const groupBalances = Array.from(studentGroupIds).map(groupId => {
-                                const group = allGroupsRaw.find(g => String(g.id) === String(groupId));
-                                const { balance } = calculateStudentGroupBalance(student.id!, groupId, allSubscriptions, attendance, lessons);
-                                return { groupId, group, balance };
-                            }).filter(gb => gb.group); // Only filter out if group not found
-
-                            if (groupBalances.length === 0) return null;
-
-                            return (
+                        {/* Grouped Finance Section */}
+                        {student.name && (financeTabGroups.length > 0 || !readOnly) && (
+                            <>
                                 <section>
-                                    <h3 className="text-[10px] font-black text-ios-gray uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
-                                        <CreditCard className="w-3 h-3" />
-                                        {t('surplus') || 'Balance'}
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {groupBalances.map(({ groupId, group, balance }) => (
-                                            <button
-                                                key={groupId}
-                                                onClick={() => {
-                                                    if (group) {
-                                                        const auditResult = calculateStudentGroupBalanceWithAudit(
-                                                            student.id!, groupId, allSubscriptions, attendance, lessons
-                                                        );
-                                                        setAuditingGroup({ groupId, group, auditResult });
-                                                    }
-                                                }}
-                                                className="w-full flex items-center justify-between p-3 bg-ios-background dark:bg-zinc-800 rounded-xl active:scale-[0.98] transition-transform"
-                                            >
-                                                <div className="flex items-center gap-2">
+                                    <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
+                                        {financeTabGroups.map(group => {
+                                            const balance = calculateStudentGroupBalance(
+                                                student.id!,
+                                                String(group.id),
+                                                allSubscriptions,
+                                                attendance,
+                                                lessons
+                                            ).balance;
+                                            const isSelected = String(group.id) === String(selectedFinanceGroupId);
+
+                                            return (
+                                                <button
+                                                    key={group.id}
+                                                    onClick={() => setSelectedFinanceGroupId(String(group.id))}
+                                                    className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-2xl border transition-all ${isSelected
+                                                        ? 'border-transparent text-white shadow-sm'
+                                                        : 'bg-ios-background dark:bg-zinc-800 border-transparent text-ios-gray'
+                                                        }`}
+                                                    style={isSelected ? { backgroundColor: group.color } : undefined}
+                                                >
                                                     <div
-                                                        className="w-3 h-3 rounded-full"
-                                                        style={{ backgroundColor: group?.color || '#888' }}
+                                                        className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'ring-1 ring-white' : ''}`}
+                                                        style={{ backgroundColor: group.color }}
                                                     />
-                                                    <span className="font-medium dark:text-white text-sm">{group?.name || 'Unknown'}</span>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <span className={`font-bold ${balance > 0 ? 'text-ios-green' : 'text-ios-red'}`}>
+                                                    <span className={`text-sm font-semibold ${isSelected ? 'text-white' : 'dark:text-white'}`}>{group.name}</span>
+                                                    <span className={`text-sm font-bold ${isSelected ? 'text-white' : balance > 0 ? 'text-ios-green' : balance < 0 ? 'text-ios-red' : 'text-ios-gray'}`}>
                                                         {balance > 0 ? `+${balance}` : balance}
                                                     </span>
-                                                    <ChevronRight className="w-4 h-4 text-ios-gray" />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </section>
-                            );
-                        })()}
-
-                        {/* Subscriptions Section (visible only if not blank new student) */}
-                        {student.name && (
-                            <>
-                                {/* Active Subscriptions */}
-                                <section>
-                                    <div className="flex items-center justify-between mb-3 px-1">
-                                        <div className="flex items-center gap-1.5 text-ios-gray">
-                                            <CreditCard className="w-3.5 h-3.5" />
-                                            <h3 className="text-[10px] font-black uppercase tracking-widest">{t('passes')}</h3>
-                                        </div>
-                                        {!readOnly && (
-                                            <button
-                                                onClick={() => setIsBuyModalOpen(true)}
-                                                className="flex items-center gap-1 text-ios-blue font-semibold active:scale-95 transition-transform"
-                                            >
-                                                <Plus className="w-4 h-4" />
-                                                <span className="text-xs uppercase tracking-tight">{t('buy_pass')}</span>
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {activeSubs.map(sub => {
-                                            const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
-                                            const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
-                                            return (
-                                                <PassCard
-                                                    key={sub.id}
-                                                    pass={{
-                                                        id: String(sub.id),
-                                                        name: originalPass?.name || '',
-                                                        price: sub.price,
-                                                        lessons_count: sub.lessons_total,
-                                                        is_consecutive: sub.is_consecutive,
-                                                        duration_days: sub.duration_days || originalPass?.duration_days
-                                                    }}
-                                                    groupsList={group ? [group] : []}
-                                                    onClick={() => setEditingSub(sub)}
-                                                    showChevron={true}
-                                                    startDate={sub.purchase_date}
-                                                    endDate={sub.expiry_date}
-                                                    warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
-                                                />
+                                                </button>
                                             );
                                         })}
 
-                                        {activeSubs.length === 0 && (
-                                            <div className="py-8 text-center bg-ios-background dark:bg-zinc-800 rounded-[24px] border-2 border-dashed border-gray-100 dark:border-zinc-700">
-                                                <AlertCircle className="w-8 h-8 text-ios-gray/30 mx-auto mb-2" />
-                                                <p className="text-ios-gray text-sm font-medium">{t('no_active_subscriptions')}</p>
-                                            </div>
+                                        {!readOnly && (
+                                            <button
+                                                onClick={() => setAddingToGroup(true)}
+                                                className={`shrink-0 flex items-center justify-center px-3 py-2 rounded-2xl border active:scale-[0.98] transition-transform ${addingToGroup
+                                                    ? 'bg-ios-card dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 text-ios-blue shadow-sm'
+                                                    : 'bg-ios-background dark:bg-zinc-800 border-transparent text-ios-blue'
+                                                    }`}
+                                                aria-label={t('add')}
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                            </button>
                                         )}
                                     </div>
-                                </section>
 
-                                {/* Archive */}
-                                {historySubs.length > 0 && (
-                                    <section className="mt-4">
-                                        <button
-                                            onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                            className="w-full flex items-center justify-between py-2 px-1 text-ios-gray hover:text-ios-blue transition-colors group"
-                                        >
-                                            <div className="flex items-center gap-1.5 ">
-                                                <h3 className="text-[10px] font-black uppercase tracking-widest">{t('archive')}</h3>
-                                                <span className="text-[10px] font-bold opacity-50">({historySubs.length})</span>
+                                    {addingToGroup && !readOnly && (
+                                        <div className="w-full p-3 mb-3 bg-ios-background dark:bg-zinc-800 rounded-2xl space-y-3">
+                                            <select
+                                                value={selectedGroupId}
+                                                onChange={(e) => setSelectedGroupId(e.target.value)}
+                                                className="w-full px-3 py-2 rounded-lg bg-ios-card dark:bg-zinc-700 dark:text-white"
+                                            >
+                                                <option value="">{t('select_group')}</option>
+                                                {activeGroups.map(g => {
+                                                    const isAssigned = memberGroupIds.includes(String(g.id));
+                                                    return (
+                                                        <option
+                                                            key={g.id}
+                                                            value={g.id}
+                                                            disabled={isAssigned}
+                                                        >
+                                                            {g.name}{isAssigned ? ` (${t('already_added') || 'added'})` : ''}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setAddingToGroup(false)}
+                                                    className="flex-1 py-2 rounded-lg bg-gray-200 dark:bg-zinc-600 dark:text-white text-sm"
+                                                >
+                                                    {t('cancel')}
+                                                </button>
+                                                <button
+                                                    onClick={handleAddToGroup}
+                                                    disabled={!selectedGroupId}
+                                                    className="flex-1 py-2 rounded-lg bg-ios-blue text-white font-semibold text-sm disabled:opacity-50"
+                                                >
+                                                    {t('add')}
+                                                </button>
                                             </div>
-                                            {isArchiveOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                        </button>
+                                        </div>
+                                    )}
 
-                                        {isArchiveOpen && (
-                                            <div className="space-y-3 mt-2 opacity-60 hover:opacity-100 transition-opacity">
-                                                {historySubs.map(sub => {
+                                    {selectedFinanceGroup && selectedFinanceAudit ? (
+                                        <>
+                                            {!readOnly && (
+                                                <button
+                                                    onClick={() => setIsPassPickerOpen(open => !open)}
+                                                    className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-ios-card dark:bg-zinc-900 text-sm text-black dark:text-white border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform ${isPassPickerOpen ? 'shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.35)] relative z-10' : 'mb-2'}`}
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    <span>{t('buy_pass')}</span>
+                                                </button>
+                                            )}
+
+                                            {!readOnly && isPassPickerOpen && (
+                                                <div className="mb-2 -mt-3 pt-3 rounded-b-2xl bg-ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 border-t-0 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    {selectedGroupPasses.map(pass => (
+                                                        <button
+                                                            key={pass.id}
+                                                            onClick={() => handleStartSubscriptionDraft(String(pass.id))}
+                                                            className="w-full px-4 py-3 text-left border-b last:border-b-0 border-gray-100 dark:border-zinc-800 active:bg-ios-background dark:active:bg-zinc-800 transition-colors"
+                                                        >
+                                                            <div className="min-w-0 text-sm text-black dark:text-white truncate">
+                                                                {[getPassDisplayName(pass, t), `${pass.price} ₾`].filter(Boolean).join(', ')}
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                    {selectedGroupPasses.length === 0 && (
+                                                        <div className="px-4 py-3 text-sm text-ios-gray">
+                                                            {t('no_passes_found') || 'No passes available for this group'}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-3">
+                                                {selectedActiveSubs.map(sub => {
                                                     const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
                                                     const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
+                                                    const cardDates = getSubscriptionCardDates(sub);
+                                                    const passUsage = selectedFinanceAudit.passUsage.find(item => item.passId === sub.id);
+                                                    const lessonsUsed = passUsage?.lessonsUsed || 0;
+                                                    const lessonsRemaining = Math.max(sub.lessons_total - lessonsUsed, 0);
                                                     return (
                                                         <PassCard
                                                             key={sub.id}
@@ -546,23 +683,158 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                                                 id: String(sub.id),
                                                                 name: originalPass?.name || '',
                                                                 price: sub.price,
-                                                                lessons_count: sub.lessons_total,
+                                                                lessons_count: lessonsRemaining,
                                                                 is_consecutive: sub.is_consecutive,
                                                                 duration_days: sub.duration_days || originalPass?.duration_days
                                                             }}
                                                             groupsList={group ? [group] : []}
                                                             onClick={() => setEditingSub(sub)}
-                                                            showChevron={true}
-                                                            startDate={sub.purchase_date}
-                                                            endDate={sub.expiry_date}
+                                                            showChevron={false}
+                                                            totalLessons={sub.lessons_total}
+                                                            startDate={cardDates.startDate}
+                                                            endDate={cardDates.endDate}
+                                                            endDateText={cardDates.endDateText}
+                                                            endDatePending={cardDates.endDatePending}
                                                             warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
                                                         />
                                                     );
                                                 })}
+
+                                                {selectedActiveSubs.length === 0 && (
+                                                    <div className="py-8 text-center bg-ios-background dark:bg-zinc-800 rounded-[24px] border-2 border-dashed border-gray-100 dark:border-zinc-700">
+                                                        <AlertCircle className="w-8 h-8 text-ios-gray/30 mx-auto mb-2" />
+                                                        <p className="text-ios-gray text-sm font-medium">{t('no_active_subscriptions')}</p>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </section>
-                                )}
+
+                                            {selectedUsedSubs.length > 0 && (
+                                                <section className="mt-3">
+                                                    <button
+                                                        onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+                                                        className="w-full flex items-center justify-between px-3 py-3 rounded-2xl bg-ios-background dark:bg-zinc-800 text-ios-gray hover:text-ios-blue transition-colors group"
+                                                    >
+                                                        <div className="flex items-center gap-1.5">
+                                                            <h3 className="text-[10px] font-black uppercase tracking-widest">{t('used_passes')}</h3>
+                                                            <span className="text-[10px] font-bold opacity-50">({selectedUsedSubs.length})</span>
+                                                        </div>
+                                                        {isArchiveOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                    </button>
+
+                                                    {isArchiveOpen && (
+                                                        <div className="space-y-3 mt-2 opacity-60 hover:opacity-100 transition-opacity">
+                                                            {selectedUsedSubs.map((sub: Subscription) => {
+                                                                const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
+                                                                const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
+                                                                const cardDates = getSubscriptionCardDates(sub);
+                                                                return (
+                                                                    <PassCard
+                                                                        key={sub.id}
+                                                                        pass={{
+                                                                            id: String(sub.id),
+                                                                            name: originalPass?.name || '',
+                                                                            price: sub.price,
+                                                                            lessons_count: 0,
+                                                                            is_consecutive: sub.is_consecutive,
+                                                                            duration_days: sub.duration_days || originalPass?.duration_days
+                                                                        }}
+                                                                        groupsList={group ? [group] : []}
+                                                                        onClick={() => setEditingSub(sub)}
+                                                                        showChevron={false}
+                                                                        totalLessons={sub.lessons_total}
+                                                                        startDate={cardDates.startDate}
+                                                                        endDate={cardDates.endDate}
+                                                                        endDateText={cardDates.endDateText}
+                                                                        endDatePending={cardDates.endDatePending}
+                                                                        warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
+                                                                    />
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </section>
+                                            )}
+
+                                            <div className="bg-ios-card dark:bg-zinc-900 rounded-2xl p-4 mt-4 shadow-sm border border-black/[0.02] dark:border-white/[0.02]">
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-ios-gray">{t('passes') || 'Passes'}</span>
+                                                    <span className="font-medium text-ios-green">+{totalPassCredit}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-sm mt-2">
+                                                    <span className="text-ios-gray">{t('counted_lessons') || 'Sessions'}</span>
+                                                    <span className="font-medium text-ios-red">-{selectedFinanceAudit.lessonsOwed}</span>
+                                                </div>
+                                                <div className="border-t border-gray-100 dark:border-zinc-700 mt-3 pt-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-bold dark:text-white">
+                                                            {selectedFinanceAudit.balance >= 0 ? (t('surplus') || 'Remaining') : (t('debt') || 'Debt')}
+                                                        </span>
+                                                        <span className={cn(
+                                                            "font-bold text-lg",
+                                                            selectedFinanceBalance > 0 ? 'text-ios-green' : selectedFinanceBalance < 0 ? 'text-ios-red' : 'text-ios-gray'
+                                                        )}>
+                                                            {selectedFinanceBalance > 0 ? `+${selectedFinanceBalance}` : selectedFinanceBalance}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {coveredEntries.length > 0 && (
+                                                <section className="mt-4">
+                                                    <h3 className="text-[10px] font-black text-ios-green uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
+                                                        <CheckCircle2 className="w-3 h-3" />
+                                                        {t('covered_lessons') || 'Covered'} ({coveredEntries.length})
+                                                    </h3>
+                                                    <div className="space-y-2">
+                                                        {coveredEntries.map(entry => (
+                                                            <LessonCard key={entry.lessonId} entry={entry} />
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )}
+
+                                            {uncoveredEntries.length > 0 && (
+                                                <section className="mt-4">
+                                                    <h3 className="text-[10px] font-black text-ios-red uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
+                                                        <AlertCircle className="w-3 h-3" />
+                                                        {t('uncovered_lessons') || 'Uncovered'} ({uncoveredEntries.length})
+                                                    </h3>
+                                                    <div className="space-y-2">
+                                                        {uncoveredEntries.map(entry => (
+                                                            <LessonCard key={entry.lessonId} entry={entry} />
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )}
+
+                                            {notCountedEntries.length > 0 && (
+                                                <section className="mt-4">
+                                                    <h3 className="text-[10px] font-black text-ios-gray uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
+                                                        <XCircle className="w-3 h-3" />
+                                                        {t('not_counted_lessons') || 'Not Counted'} ({notCountedEntries.length})
+                                                    </h3>
+                                                    <div className="space-y-2">
+                                                        {notCountedEntries.map(entry => (
+                                                            <LessonCard key={entry.lessonId} entry={entry} />
+                                                        ))}
+                                                    </div>
+                                                </section>
+                                            )}
+
+                                            {selectedFinanceAudit.auditEntries.length === 0 && (
+                                                <div className="py-12 text-center">
+                                                    <Calendar className="w-12 h-12 text-ios-gray/30 mx-auto mb-3" />
+                                                    <p className="text-ios-gray text-sm">{t('no_lessons_covered') || 'No attendance records yet'}</p>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="py-8 text-center bg-ios-background dark:bg-zinc-800 rounded-[24px] border-2 border-dashed border-gray-100 dark:border-zinc-700">
+                                            <AlertCircle className="w-8 h-8 text-ios-gray/30 mx-auto mb-2" />
+                                            <p className="text-ios-gray text-sm font-medium">{t('groups')}</p>
+                                        </div>
+                                    )}
+                                </section>
                             </>
                         )}
 
@@ -618,34 +890,22 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 </div >
             </div >
 
-            <BuySubscriptionModal
-                isOpen={isBuyModalOpen}
-                student={student}
-                onClose={() => setIsBuyModalOpen(false)}
-                onBuy={handleBuySubscription}
-            />
-
             {
                 editingSub && (
                     <SubscriptionDetailSheet
                         isOpen={!!editingSub}
                         onClose={() => setEditingSub(null)}
                         subscription={editingSub}
+                        onCreate={handleBuySubscription}
                     />
                 )
             }
 
-            {
-                auditingGroup && (
-                    <BalanceAuditSheet
-                        isOpen={!!auditingGroup}
-                        onClose={() => setAuditingGroup(null)}
-                        auditResult={auditingGroup.auditResult}
-                        group={auditingGroup.group}
-                        subscriptions={allSubscriptions}
-                    />
-                )
-            }
+            <LessonDetailSheet
+                lesson={selectedLesson}
+                onClose={() => setSelectedLesson(null)}
+                zIndexClass="z-[120]"
+            />
         </>
     );
 };
