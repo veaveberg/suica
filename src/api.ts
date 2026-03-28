@@ -118,6 +118,23 @@ export async function syncAttendance(lessonId: string, attendance: any[]): Promi
     });
 }
 
+export async function markAttendance(args: {
+    lesson_id: string,
+    student_id: string,
+    status: "present" | "absence_valid" | "absence_invalid",
+    payment_amount?: number,
+}): Promise<void> {
+    const { userId, authToken } = requireAuth();
+    await convex.mutation(api.attendance.mark, {
+        userId,
+        authToken,
+        lesson_id: args.lesson_id as Id<"lessons">,
+        student_id: args.student_id as Id<"students">,
+        status: args.status,
+        payment_amount: args.payment_amount
+    });
+}
+
 export async function clearTable(_table: TableName): Promise<void> {
     console.warn("clearTable not supported");
 }

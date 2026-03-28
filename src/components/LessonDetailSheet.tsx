@@ -50,6 +50,15 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
     const isLongPressRef = useRef(false);
     const [showStudentSelector, setShowStudentSelector] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
+    const initialStateRef = useRef<{
+        attendanceData: Record<string, AttendanceStatus | 'not_marked'>,
+        notes: string,
+        infoForStudents: string,
+        isCompleted: boolean,
+        newDate: string,
+        newTime: string,
+        newDuration: number | string,
+    } | null>(null);
 
     // Get group info
     const group = lesson ? groups.find(g => String(g.id) === String(lesson.group_id)) : null;
@@ -146,9 +155,27 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                         map[r.student_id] = r.status;
                     });
                     setAttendanceData(map);
+                    initialStateRef.current = {
+                        attendanceData: map,
+                        notes: lesson.notes || '',
+                        infoForStudents: lesson.info_for_students || '',
+                        isCompleted: lesson.status === 'completed',
+                        newDate: lesson.date,
+                        newTime: lesson.time,
+                        newDuration: lesson.duration_minutes,
+                    };
                 })
                 .catch(() => {
                     setAttendanceData({});
+                    initialStateRef.current = {
+                        attendanceData: {},
+                        notes: lesson.notes || '',
+                        infoForStudents: lesson.info_for_students || '',
+                        isCompleted: lesson.status === 'completed',
+                        newDate: lesson.date,
+                        newTime: lesson.time,
+                        newDuration: lesson.duration_minutes,
+                    };
                 });
         } else {
             setAttendanceData({});
@@ -157,6 +184,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             setIsCompleted(false);
             setShowDeleteConfirm(false);
             setShowReschedule(false);
+            initialStateRef.current = null;
         }
     }, [lesson]);
 
@@ -169,6 +197,22 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
 
     const activeStudents = groupStudents.filter(s => s.status !== 'archived');
     const archivedStudents = groupStudents.filter(s => s.status === 'archived');
+
+    const handleSheetClose = () => {
+        const initialState = initialStateRef.current;
+        if (initialState) {
+            setAttendanceData(initialState.attendanceData);
+            setNotes(initialState.notes);
+            setInfoForStudents(initialState.infoForStudents);
+            setIsCompleted(initialState.isCompleted);
+            setNewDate(initialState.newDate);
+            setNewTime(initialState.newTime);
+            setNewDuration(initialState.newDuration);
+        }
+        setShowDeleteConfirm(false);
+        setShowReschedule(false);
+        onClose();
+    };
 
 
     const handleSave = async () => {
@@ -454,12 +498,12 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
 
     return (
         <div className={cn("fixed inset-0 flex items-end sm:items-center justify-center", zIndexClass || "z-[80]")}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleSheetClose} />
 
             <div className="relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                    <button onClick={onClose} className="p-1">
+                    <button onClick={handleSheetClose} className="p-1">
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
                     <div className="flex-1 flex justify-center min-w-0 px-2">

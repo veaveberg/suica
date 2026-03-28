@@ -57,6 +57,7 @@ interface PassCardProps {
     groupsList: Group[];
     onClick?: () => void;
     showChevron?: boolean;
+    flat?: boolean;
     totalLessons?: number;
     startDate?: string;
     endDate?: string;
@@ -70,6 +71,7 @@ export const PassCard: React.FC<PassCardProps> = ({
     groupsList,
     onClick,
     showChevron = true,
+    flat = false,
     totalLessons,
     startDate,
     endDate,
@@ -119,7 +121,10 @@ export const PassCard: React.FC<PassCardProps> = ({
         <CardComponent
             onClick={onClick}
             className={cn(
-                "w-full bg-ios-card dark:bg-zinc-900 px-4 py-2.5 rounded-2xl shadow-sm transition-transform text-left border border-gray-100 dark:border-zinc-800",
+                "w-full bg-ios-card dark:bg-zinc-900 px-4 py-2.5 transition-transform text-left",
+                flat
+                    ? "rounded-none shadow-none border-0"
+                    : "rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800",
                 isInteractive ? "active:scale-[0.98] cursor-pointer" : "cursor-text scale-100 select-text"
             )}
         >
@@ -161,7 +166,7 @@ export const PassCard: React.FC<PassCardProps> = ({
                                                         fill="none"
                                                         stroke="currentColor"
                                                         strokeWidth="2"
-                                                        className="text-ios-gray/25 dark:text-zinc-700"
+                                                        className="text-gray-300 dark:text-zinc-700"
                                                     />
                                                     <circle
                                                         cx="10"

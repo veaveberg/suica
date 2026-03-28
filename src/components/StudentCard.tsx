@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, AlertCircle, Instagram, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, CheckCircle2, XCircle, Calendar } from 'lucide-react';
-import type { Subscription, Student, Lesson } from '../types';
+import { X, Plus, Instagram, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, Calendar, XCircle, CheckCircle2, Check } from 'lucide-react';
+import type { Subscription, Student, Lesson, AttendanceStatus } from '../types';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import { PassCard } from './PassCard';
@@ -13,7 +13,7 @@ import type { BalanceAuditEntry, AuditReason } from '../utils/balance';
 import { getConsecutiveSubscriptionExpiration } from '../utils/subscriptionDates';
 import { TelegramIcon } from './Icons';
 import { cn } from '../utils/cn';
-import { formatDate, formatTimeRange } from '../utils/formatting';
+import { formatDate, formatDateRange, formatTimeRange } from '../utils/formatting';
 import { getPassDisplayName } from '../utils/passUtils';
 
 function getTodayLocalDate(): string {
@@ -54,11 +54,17 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const [isPassPickerOpen, setIsPassPickerOpen] = useState(false);
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+    const [isUpcomingOpen, setIsUpcomingOpen] = useState(false);
+    const [isPaidLessonsOpen, setIsPaidLessonsOpen] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [selectedFinanceGroupId, setSelectedFinanceGroupId] = useState<string | null>(null);
+    const [lessonStatusOverrides, setLessonStatusOverrides] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
+    const [lessonAttendanceSaving, setLessonAttendanceSaving] = useState<Record<string, boolean>>({});
     const lastInitializedId = React.useRef<string | null>(null);
+    const initialAttendanceSnapshotRef = React.useRef<Record<string, { id?: string, status: AttendanceStatus | 'not_marked', payment_amount?: number }>>({});
+    const changedLessonIdsRef = React.useRef<Set<string>>(new Set());
 
-    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, subscriptions: allSubscriptions, lessons, passes, passGroups, attendance } = useData();
+    const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, refreshAttendance, subscriptions: allSubscriptions, lessons, passes, passGroups, attendance } = useData();
     const activeGroups = allGroupsRaw.filter(g => g.status === 'active');
 
     // Reset edit state when student changes or sheet opens
@@ -74,7 +80,21 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 setIsPassPickerOpen(false);
                 setShowDeleteConfirm(false);
                 setAddingToGroup(false);
+                setIsUpcomingOpen(false);
+                setIsPaidLessonsOpen(false);
+                setLessonStatusOverrides({});
+                setLessonAttendanceSaving({});
                 setSelectedFinanceGroupId(null);
+                initialAttendanceSnapshotRef.current = Object.fromEntries(
+                    attendance
+                        .filter(item => String(item.student_id) === String(student.id))
+                        .map(item => [String(item.lesson_id), {
+                            id: item.id,
+                            status: item.status,
+                            payment_amount: item.payment_amount
+                        }])
+                );
+                changedLessonIdsRef.current = new Set();
                 lastInitializedId.current = student.id || null;
             }
         } else if (!isOpen) {
@@ -82,9 +102,15 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             setIsPassPickerOpen(false);
             setShowDeleteConfirm(false);
             setAddingToGroup(false);
+            setIsUpcomingOpen(false);
+            setIsPaidLessonsOpen(false);
+            setLessonStatusOverrides({});
+            setLessonAttendanceSaving({});
             setSelectedFinanceGroupId(null);
+            initialAttendanceSnapshotRef.current = {};
+            changedLessonIdsRef.current = new Set();
         }
-    }, [student, isOpen]);
+    }, [student, isOpen, attendance]);
 
     const memberAssignments = studentGroups.filter(sg => String(sg.student_id) === String(student?.id));
     const memberGroupIds = memberAssignments.map(a => String(a.group_id));
@@ -124,6 +150,36 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             !editTelegram.trim() &&
             !editInstagram.trim() &&
             !editNotes.trim();
+
+        if (student?.id && changedLessonIdsRef.current.size > 0) {
+            const currentAttendanceByLessonId = new Map(
+                attendance
+                    .filter(item => String(item.student_id) === String(student.id))
+                    .map(item => [String(item.lesson_id), item])
+            );
+
+            for (const lessonId of changedLessonIdsRef.current) {
+                const initial = initialAttendanceSnapshotRef.current[lessonId];
+                const current = currentAttendanceByLessonId.get(lessonId);
+
+                if (!initial || initial.status === 'not_marked') {
+                    if (current?.id) {
+                        await api.remove('attendance', current.id);
+                    }
+                    continue;
+                }
+
+                await api.markAttendance({
+                    lesson_id: lessonId,
+                    student_id: student.id,
+                    status: initial.status,
+                    payment_amount: initial.payment_amount
+                });
+            }
+
+            await refreshAttendance();
+            changedLessonIdsRef.current = new Set();
+        }
 
         if (student?.id && isEmpty) {
             await api.remove('students', student.id);
@@ -246,9 +302,6 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     }, [financeTabGroups, selectedFinanceGroupId]);
 
     const selectedFinanceGroup = financeTabGroups.find(group => String(group.id) === String(selectedFinanceGroupId)) || null;
-    const selectedFinanceBalance = selectedFinanceGroup && student?.id
-        ? calculateStudentGroupBalance(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons).balance
-        : 0;
     const selectedFinanceAudit = selectedFinanceGroup && student?.id
         ? calculateStudentGroupBalanceWithAudit(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons)
         : null;
@@ -285,6 +338,19 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             )
         )
         : [];
+    const selectedGroupLessons = selectedFinanceGroup
+        ? lessons
+            .filter(lesson => String(lesson.group_id) === String(selectedFinanceGroup.id))
+            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+        : [];
+    const selectedAttendanceByLessonId = new Map(
+        attendance
+            .filter(item => String(item.student_id) === studentIdStr)
+            .map(item => [String(item.lesson_id), item])
+    );
+    const lessonAuditEntryByLessonId = new Map(
+        (selectedFinanceAudit?.auditEntries || []).map(entry => [entry.lessonId, entry])
+    );
 
     const getReasonLabel = (reason: AuditReason): string => {
         switch (reason) {
@@ -328,29 +394,138 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             endDatePending: !expirationDate
         };
     };
+    const passCoversLessonDate = (sub: Subscription, lessonDate: string) => {
+        const cardDates = getSubscriptionCardDates(sub);
+        const afterStart = lessonDate >= (cardDates.startDate || sub.purchase_date);
+        const beforeExpiry = !cardDates.endDate || lessonDate <= cardDates.endDate;
+        if (!afterStart || !beforeExpiry) return false;
+        if (sub.status === 'archived' && lessonDate >= today) return false;
+        if (cardDates.endDate && cardDates.endDate < today && lessonDate >= today) return false;
+        return true;
+    };
+    const findCoveringPassForLessonDate = (lessonDate: string) =>
+        selectedActiveSubs.find(sub => passCoversLessonDate(sub, lessonDate));
+    const getSubscriptionRangeLabel = (sub: Subscription) => {
+        const cardDates = getSubscriptionCardDates(sub);
 
-    const coveredEntries = selectedFinanceAudit
-        ? selectedFinanceAudit.auditEntries.filter(entry =>
-            entry.reason === 'counted_present' ||
-            entry.reason === 'counted_absence_invalid' ||
-            entry.reason === 'counted_no_attendance_consecutive'
-        )
-        : [];
-    const uncoveredEntries = selectedFinanceAudit
-        ? selectedFinanceAudit.auditEntries.filter(entry =>
-            entry.reason === 'uncovered_pass_depleted' || entry.reason === 'uncovered_no_matching_pass'
-        )
-        : [];
-    const notCountedEntries = selectedFinanceAudit
-        ? selectedFinanceAudit.auditEntries.filter(entry =>
-            entry.reason === 'not_counted_valid_skip' ||
-            entry.reason === 'not_counted_cancelled' ||
-            entry.reason === 'not_counted_no_attendance'
-        )
-        : [];
+        if (cardDates.startDate && cardDates.endDate) {
+            return formatDateRange(cardDates.startDate, cardDates.endDate, i18n);
+        }
+
+        if (cardDates.startDate) {
+            return t('from_only', { date: formatDate(cardDates.startDate, i18n, { includeWeekday: false }) });
+        }
+
+        return cardDates.endDateText;
+    };
+    const getSubscriptionMetaLabel = (sub: Subscription) => {
+        const lessonsWord = t('lessons', { count: sub.lessons_total }) || 'lessons';
+        const lessonsLabel = sub.is_consecutive
+            ? `${sub.lessons_total} ${lessonsWord} ${t('in_a_row') || 'in a row'}`
+            : sub.duration_days
+                ? `${sub.lessons_total} ${lessonsWord}, ${sub.duration_days} ${t('days', { count: sub.duration_days }) || 'days'}`
+                : `${sub.lessons_total} ${lessonsWord}`;
+        const rangeLabel = getSubscriptionRangeLabel(sub);
+        return rangeLabel ? `${lessonsLabel}, ${rangeLabel}` : lessonsLabel;
+    };
+
+    const lessonAuditEntries = selectedGroupLessons.map<BalanceAuditEntry>(lesson => {
+        const existingEntry = lessonAuditEntryByLessonId.get(String(lesson.id));
+        if (existingEntry) return existingEntry;
+
+        const attendanceRecord = selectedAttendanceByLessonId.get(String(lesson.id));
+        const matchingPass = findCoveringPassForLessonDate(lesson.date);
+        const hasMatchingPass = !!matchingPass;
+
+        if (lesson.status === 'cancelled') {
+            return {
+                lessonId: String(lesson.id),
+                lessonDate: lesson.date,
+                lessonTime: lesson.time,
+                attendanceStatus: attendanceRecord?.status ?? null,
+                status: 'not_counted',
+                reason: 'not_counted_cancelled'
+            };
+        }
+
+        if (attendanceRecord?.status === 'absence_valid') {
+            return {
+                lessonId: String(lesson.id),
+                lessonDate: lesson.date,
+                lessonTime: lesson.time,
+                attendanceStatus: attendanceRecord.status,
+                status: 'not_counted',
+                reason: 'not_counted_valid_skip'
+            };
+        }
+
+        return {
+            lessonId: String(lesson.id),
+            lessonDate: lesson.date,
+            lessonTime: lesson.time,
+            attendanceStatus: attendanceRecord?.status ?? null,
+            status: 'not_counted',
+            reason: hasMatchingPass ? 'not_counted_no_attendance' : 'uncovered_no_matching_pass',
+            coveredByPassId: matchingPass?.id
+        };
+    });
     const totalPassCredit = selectedFinanceAudit
         ? selectedFinanceAudit.passUsage.reduce((sum, passUsage) => sum + passUsage.lessonsTotal, 0)
         : 0;
+    const totalUsedLessons = selectedFinanceAudit
+        ? selectedFinanceAudit.lessonsOwed
+        : 0;
+    const attendedLessonsCount = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.status === 'counted' && entry.attendanceStatus === 'present'
+        ).length
+        : 0;
+    const skippedLessonsCount = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.status === 'counted' && entry.attendanceStatus === 'absence_invalid'
+        ).length
+        : 0;
+    const unmarkedDebtLessonsCount = selectedFinanceAudit
+        ? selectedFinanceAudit.auditEntries.filter(entry =>
+            entry.status === 'counted' && entry.attendanceStatus === null
+        ).length
+        : 0;
+    const nbsp = '\u00A0';
+    const attendanceSummaryText = i18n.language.toUpperCase() === 'RU'
+        ? `На${nbsp}${attendedLessonsCount}${nbsp}были, ${skippedLessonsCount}${nbsp}пропустили, на${nbsp}${unmarkedDebtLessonsCount}${nbsp}не${nbsp}отмечены`
+        : `${attendedLessonsCount} ${t('attended') || 'attended'}, ${skippedLessonsCount} ${t('skipped') || 'skipped'}, ${unmarkedDebtLessonsCount} ${t('unmarked') || 'unmarked'}`;
+    const usageSummaryText = i18n.language.toUpperCase() === 'RU'
+        ? `${totalPassCredit}${nbsp}${t('covered') || 'покрыто'}, ${totalUsedLessons}${nbsp}${t('used') || 'использовано'}. ${attendanceSummaryText}`
+        : `${totalPassCredit} ${t('covered') || 'covered'}, ${totalUsedLessons} ${t('used') || 'used'}. ${attendanceSummaryText}`;
+    const upcomingLessonEntries = lessonAuditEntries.filter(entry => entry.lessonDate > today);
+    const currentAndPastLessonEntries = lessonAuditEntries.filter(entry => entry.lessonDate <= today);
+    const twoMonthsAgo = (() => {
+        const [year, month, day] = today.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        date.setMonth(date.getMonth() - 2);
+        const nextYear = date.getFullYear();
+        const nextMonth = String(date.getMonth() + 1).padStart(2, '0');
+        const nextDay = String(date.getDate()).padStart(2, '0');
+        return `${nextYear}-${nextMonth}-${nextDay}`;
+    })();
+    const recentCurrentAndPastLessonEntries = currentAndPastLessonEntries.filter(entry => entry.lessonDate >= twoMonthsAgo);
+    const earlierLessonEntries = currentAndPastLessonEntries.filter(entry => entry.lessonDate < twoMonthsAgo);
+    const areEarlierLessonsContinuouslyPaid = earlierLessonEntries.length > 0 && earlierLessonEntries.every(entry => {
+        if (entry.reason === 'uncovered_pass_depleted') {
+            return false;
+        }
+
+        if (entry.status !== 'counted') {
+            return true;
+        }
+
+        if (!entry.coveredByPassId) {
+            return false;
+        }
+
+        const pass = allSubscriptions.find(subscription => subscription.id === entry.coveredByPassId);
+        return !!pass && pass.is_paid !== false;
+    });
 
     const LessonCard: React.FC<{ entry: BalanceAuditEntry }> = ({ entry }) => {
         const sub = entry.coveredByPassId
@@ -358,55 +533,167 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             : undefined;
         const lesson = lessons.find(item => String(item.id) === entry.lessonId);
         const isCounted = entry.status === 'counted';
+        const existingAttendance = selectedAttendanceByLessonId.get(String(entry.lessonId));
+        const status = lessonStatusOverrides[entry.lessonId]
+            ?? existingAttendance?.status
+            ?? 'not_marked';
+        const isSavingAttendance = !!lessonAttendanceSaving[entry.lessonId];
+        const skipTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+        const isLongPressRef = React.useRef(false);
+
+        const syncEntryAttendance = async (newStatus: AttendanceStatus | 'not_marked') => {
+            if (!student?.id || !lesson?.id) return;
+            if (lessonAttendanceSaving[entry.lessonId]) return;
+
+            const previousStatus = status;
+            const initialStatus = initialAttendanceSnapshotRef.current[entry.lessonId]?.status ?? 'not_marked';
+            setLessonStatusOverrides(prev => ({ ...prev, [entry.lessonId]: newStatus }));
+            setLessonAttendanceSaving(prev => ({ ...prev, [entry.lessonId]: true }));
+            if (newStatus !== initialStatus) {
+                changedLessonIdsRef.current.add(entry.lessonId);
+            } else {
+                changedLessonIdsRef.current.delete(entry.lessonId);
+            }
+
+            try {
+                if (newStatus !== 'not_marked') {
+                    await api.markAttendance({
+                        lesson_id: lesson.id,
+                        student_id: student.id,
+                        status: newStatus,
+                        payment_amount: existingAttendance?.status === newStatus ? existingAttendance.payment_amount : undefined
+                    });
+                } else if (existingAttendance?.id) {
+                    await api.remove('attendance', existingAttendance.id);
+                }
+                await refreshAttendance();
+            } catch (error) {
+                console.error('Failed to update attendance:', error);
+                setLessonStatusOverrides(prev => ({ ...prev, [entry.lessonId]: previousStatus }));
+                if (previousStatus !== initialStatus) {
+                    changedLessonIdsRef.current.add(entry.lessonId);
+                } else {
+                    changedLessonIdsRef.current.delete(entry.lessonId);
+                }
+            } finally {
+                setLessonAttendanceSaving(prev => ({ ...prev, [entry.lessonId]: false }));
+            }
+        };
+
+        const handleSkipPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+            e.stopPropagation();
+            isLongPressRef.current = false;
+            skipTimerRef.current = setTimeout(() => {
+                isLongPressRef.current = true;
+                const nextSkipStatus = status === 'absence_valid' ? 'absence_invalid' : 'absence_valid';
+                void syncEntryAttendance(nextSkipStatus);
+                if (navigator.vibrate) navigator.vibrate(50);
+            }, 500);
+        };
+
+        const handleSkipPointerUp = (e?: React.PointerEvent<HTMLButtonElement> | React.MouseEvent<HTMLButtonElement>) => {
+            e?.stopPropagation();
+            if (skipTimerRef.current) {
+                clearTimeout(skipTimerRef.current);
+                skipTimerRef.current = null;
+            }
+        };
+
+        const handleSkipClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation();
+            if (isLongPressRef.current) return;
+            void syncEntryAttendance(status === 'absence_invalid' || status === 'absence_valid' ? 'not_marked' : 'absence_invalid');
+        };
+
+        const handlePresentClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+            e.stopPropagation();
+            void syncEntryAttendance(status === 'present' ? 'not_marked' : 'present');
+        };
 
         return (
-            <button
+            <div
+                role={lesson ? "button" : undefined}
+                tabIndex={lesson ? 0 : undefined}
                 onClick={() => lesson && setSelectedLesson(lesson)}
+                onKeyDown={(e) => {
+                    if (!lesson) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedLesson(lesson);
+                    }
+                }}
                 className={cn(
-                    "w-full px-4 py-3 rounded-2xl bg-ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800",
-                    "flex items-center justify-between active:scale-[0.98] transition-all text-left"
+                    "w-full px-4 py-3 bg-ios-card dark:bg-zinc-900",
+                    "flex items-start justify-between gap-4 active:scale-[0.98] transition-all text-left"
                 )}
             >
                 <div className="flex flex-col min-w-0">
-                    <div className="font-bold dark:text-white text-base leading-tight">
-                        {formatDate(entry.lessonDate, i18n)}
+                    <div className="dark:text-white text-sm leading-tight">
+                        {formatDate(entry.lessonDate, i18n)}, {lesson ? formatTimeRange(entry.lessonTime, lesson.duration_minutes) : entry.lessonTime}
                     </div>
-                    <div className="text-xs text-ios-gray mt-0.5">
-                        {lesson ? formatTimeRange(entry.lessonTime, lesson.duration_minutes) : entry.lessonTime}
-                    </div>
+                    {sub ? (
+                        <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
+                            {getSubscriptionMetaLabel(sub)}
+                        </div>
+                    ) : (entry.reason === 'uncovered_no_matching_pass' || entry.reason === 'uncovered_pass_depleted') ? (
+                        <div className={cn(
+                            "text-[10px] font-medium mt-0.5 opacity-80",
+                            entry.status === 'counted' ? 'text-ios-red' : 'text-ios-gray'
+                        )}>
+                            {getReasonLabel(entry.reason)}
+                        </div>
+                    ) : entry.reason !== 'counted_present' && entry.reason !== 'counted_absence_invalid' && entry.reason !== 'counted_no_attendance_consecutive' && (
+                        <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
+                            {getReasonLabel(entry.reason)}
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="text-right">
-                        <div className={cn(
-                            "text-sm font-bold",
-                            entry.attendanceStatus === 'present' ? 'text-ios-green' :
-                                entry.attendanceStatus === 'absence_invalid' ? 'text-ios-red' :
-                                    entry.attendanceStatus === 'absence_valid' ? 'text-ios-blue' :
-                                        entry.reason === 'counted_absence_invalid' || entry.reason === 'counted_no_attendance_consecutive'
-                                            ? 'text-ios-orange'
-                                            : 'text-ios-gray'
-                        )}>
-                            {entry.attendanceStatus === 'present' ? t('attendance_present') :
-                                entry.attendanceStatus === 'absence_invalid' ? t('attendance_absence_invalid') :
-                                    entry.attendanceStatus === 'absence_valid' ? t('attendance_absence_valid') :
-                                        entry.reason === 'counted_absence_invalid'
-                                            ? t('attendance_absence_invalid')
-                                            : getReasonLabel(entry.reason)}
-                        </div>
+                <div className="flex items-center gap-3 shrink-0 self-center">
+                    <div className="flex shrink-0">
+                        <button
+                            onPointerDown={handleSkipPointerDown}
+                            onPointerUp={handleSkipPointerUp}
+                            onPointerLeave={handleSkipPointerUp}
+                            onClick={handleSkipClick}
+                            disabled={isSavingAttendance}
+                            className={`p-1.5 rounded-l-xl flex items-center justify-center transition-all select-none ${(status === 'absence_invalid' || status === 'absence_valid')
+                                ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                                : ''
+                                } ${isSavingAttendance ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
+                            {status === 'absence_invalid' ? (
+                                <div className="w-6 h-6 rounded-full bg-ios-red flex items-center justify-center">
+                                    <X className="w-4 h-4 text-white dark:text-zinc-700" strokeWidth={4} />
+                                </div>
+                            ) : status === 'absence_valid' ? (
+                                <div className="w-6 h-6 rounded-full bg-ios-blue flex items-center justify-center">
+                                    <X className="w-4 h-4 text-white dark:text-zinc-700" strokeWidth={4} />
+                                </div>
+                            ) : (
+                                <XCircle className="w-6 h-6 text-gray-300 dark:text-zinc-600" />
+                            )}
+                        </button>
 
-                        {sub ? (
-                            <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
-                                {getPassDisplayName(sub, t)}
-                            </div>
-                        ) : (
-                            <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
-                                {getReasonLabel(entry.reason)}
-                            </div>
-                        )}
+                        <button
+                            onClick={handlePresentClick}
+                            disabled={isSavingAttendance}
+                            className={`p-1.5 rounded-r-xl flex items-center justify-center transition-all select-none ${status === 'present'
+                                ? 'bg-white dark:bg-zinc-700 shadow-sm'
+                                : ''
+                                } ${isSavingAttendance ? 'opacity-50 pointer-events-none' : ''}`}
+                        >
+                            {status === 'present' ? (
+                                <div className="w-6 h-6 rounded-full bg-ios-green flex items-center justify-center">
+                                    <Check className="w-4 h-4 text-white dark:text-zinc-700" strokeWidth={4} />
+                                </div>
+                            ) : (
+                                <CheckCircle2 className="w-6 h-6 text-gray-300 dark:text-zinc-600" />
+                            )}
+                        </button>
                     </div>
 
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-ios-background dark:bg-black border border-black/[0.03] dark:border-white/[0.03] shrink-0">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-ios-background dark:bg-black border border-black/[0.03] dark:border-white/[0.03]">
                         <span className={cn(
                             "text-sm font-black",
                             isCounted ? "dark:text-white text-black" : "text-ios-gray opacity-40"
@@ -415,7 +702,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         </span>
                     </div>
                 </div>
-            </button>
+            </div>
         );
     };
 
@@ -585,13 +872,16 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         {!readOnly && (
                                             <button
                                                 onClick={() => setAddingToGroup(true)}
-                                                className={`shrink-0 flex items-center justify-center px-3 py-2 rounded-2xl border active:scale-[0.98] transition-transform ${addingToGroup
+                                                className={`flex items-center justify-center gap-2 px-3 py-2 rounded-2xl border active:scale-[0.98] transition-transform ${financeTabGroups.length === 0 ? 'w-full' : 'shrink-0'} ${addingToGroup
                                                     ? 'bg-ios-card dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 text-ios-blue shadow-sm'
                                                     : 'bg-ios-background dark:bg-zinc-800 border-transparent text-ios-blue'
                                                     }`}
-                                                aria-label={t('add')}
+                                                aria-label={financeTabGroups.length === 0 ? (t('add_group') || 'Add group') : t('add')}
                                             >
                                                 <Plus className="w-4 h-4" />
+                                                {financeTabGroups.length === 0 && (
+                                                    <span className="text-sm font-semibold">{t('add_group') || 'Add group'}</span>
+                                                )}
                                             </button>
                                         )}
                                     </div>
@@ -637,203 +927,212 @@ export const StudentCard: React.FC<StudentCardProps> = ({
 
                                     {selectedFinanceGroup && selectedFinanceAudit ? (
                                         <>
-                                            {!readOnly && (
-                                                <button
-                                                    onClick={() => setIsPassPickerOpen(open => !open)}
-                                                    className={`w-full flex items-center justify-center gap-2 px-4 py-3 bg-ios-card dark:bg-zinc-900 text-sm text-black dark:text-white border border-gray-100 dark:border-zinc-800 rounded-2xl active:scale-[0.98] transition-transform ${isPassPickerOpen ? 'shadow-[0_8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.35)] relative z-10' : 'mb-2'}`}
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                    <span>{t('buy_pass')}</span>
-                                                </button>
-                                            )}
+                                            <div className="mb-3 px-1 text-sm text-ios-gray dark:text-zinc-300">
+                                                {usageSummaryText}
+                                            </div>
+                                            <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-zinc-800 bg-ios-card dark:bg-zinc-900">
+                                                {!readOnly && (
+                                                    <button
+                                                        onClick={() => setIsPassPickerOpen(open => !open)}
+                                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm text-black dark:text-white active:bg-ios-background dark:active:bg-zinc-800 transition-colors"
+                                                    >
+                                                        <Plus className="w-4 h-4" />
+                                                        <span>{t('add_pass') || 'Add pass'}</span>
+                                                    </button>
+                                                )}
 
-                                            {!readOnly && isPassPickerOpen && (
-                                                <div className="mb-2 -mt-3 pt-3 rounded-b-2xl bg-ios-card dark:bg-zinc-900 border border-gray-100 dark:border-zinc-800 border-t-0 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                                                    {selectedGroupPasses.map(pass => (
-                                                        <button
-                                                            key={pass.id}
-                                                            onClick={() => handleStartSubscriptionDraft(String(pass.id))}
-                                                            className="w-full px-4 py-3 text-left border-b last:border-b-0 border-gray-100 dark:border-zinc-800 active:bg-ios-background dark:active:bg-zinc-800 transition-colors"
-                                                        >
-                                                            <div className="min-w-0 text-sm text-black dark:text-white truncate">
-                                                                {[getPassDisplayName(pass, t), `${pass.price} ₾`].filter(Boolean).join(', ')}
+                                                {!readOnly && isPassPickerOpen && (
+                                                    <div className="border-t border-gray-100 dark:border-zinc-800 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                                        {selectedGroupPasses.map(pass => (
+                                                            <button
+                                                                key={pass.id}
+                                                                onClick={() => handleStartSubscriptionDraft(String(pass.id))}
+                                                                className="w-full px-4 py-3 text-left border-b last:border-b-0 border-gray-100 dark:border-zinc-800 active:bg-ios-background dark:active:bg-zinc-800 transition-colors"
+                                                            >
+                                                                <div className="min-w-0 text-sm text-black dark:text-white truncate">
+                                                                    {[getPassDisplayName(pass, t), `${pass.price} ₾`].filter(Boolean).join(', ')}
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                        {selectedGroupPasses.length === 0 && (
+                                                            <div className="px-4 py-3 text-sm text-ios-gray">
+                                                                {t('no_passes_found') || 'No passes available for this group'}
                                                             </div>
-                                                        </button>
-                                                    ))}
-                                                    {selectedGroupPasses.length === 0 && (
-                                                        <div className="px-4 py-3 text-sm text-ios-gray">
-                                                            {t('no_passes_found') || 'No passes available for this group'}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            <div className="space-y-3">
-                                                {selectedActiveSubs.map(sub => {
-                                                    const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
-                                                    const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
-                                                    const cardDates = getSubscriptionCardDates(sub);
-                                                    const passUsage = selectedFinanceAudit.passUsage.find(item => item.passId === sub.id);
-                                                    const lessonsUsed = passUsage?.lessonsUsed || 0;
-                                                    const lessonsRemaining = Math.max(sub.lessons_total - lessonsUsed, 0);
-                                                    return (
-                                                        <PassCard
-                                                            key={sub.id}
-                                                            pass={{
-                                                                id: String(sub.id),
-                                                                name: originalPass?.name || '',
-                                                                price: sub.price,
-                                                                lessons_count: lessonsRemaining,
-                                                                is_consecutive: sub.is_consecutive,
-                                                                duration_days: sub.duration_days || originalPass?.duration_days
-                                                            }}
-                                                            groupsList={group ? [group] : []}
-                                                            onClick={() => setEditingSub(sub)}
-                                                            showChevron={false}
-                                                            totalLessons={sub.lessons_total}
-                                                            startDate={cardDates.startDate}
-                                                            endDate={cardDates.endDate}
-                                                            endDateText={cardDates.endDateText}
-                                                            endDatePending={cardDates.endDatePending}
-                                                            warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
-                                                        />
-                                                    );
-                                                })}
-
-                                                {selectedActiveSubs.length === 0 && (
-                                                    <div className="py-8 text-center bg-ios-background dark:bg-zinc-800 rounded-[24px] border-2 border-dashed border-gray-100 dark:border-zinc-700">
-                                                        <AlertCircle className="w-8 h-8 text-ios-gray/30 mx-auto mb-2" />
-                                                        <p className="text-ios-gray text-sm font-medium">{t('no_active_subscriptions')}</p>
+                                                        )}
                                                     </div>
                                                 )}
-                                            </div>
 
-                                            {selectedUsedSubs.length > 0 && (
-                                                <section className="mt-3">
-                                                    <button
-                                                        onClick={() => setIsArchiveOpen(!isArchiveOpen)}
-                                                        className="w-full flex items-center justify-between px-3 py-3 rounded-2xl bg-ios-background dark:bg-zinc-800 text-ios-gray hover:text-ios-blue transition-colors group"
-                                                    >
-                                                        <div className="flex items-center gap-1.5">
-                                                            <h3 className="text-[10px] font-black uppercase tracking-widest">{t('used_passes')}</h3>
-                                                            <span className="text-[10px] font-bold opacity-50">({selectedUsedSubs.length})</span>
-                                                        </div>
-                                                        {isArchiveOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                                    </button>
-
-                                                    {isArchiveOpen && (
-                                                        <div className="space-y-3 mt-2 opacity-60 hover:opacity-100 transition-opacity">
-                                                            {selectedUsedSubs.map((sub: Subscription) => {
-                                                                const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
-                                                                const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
-                                                                const cardDates = getSubscriptionCardDates(sub);
-                                                                return (
-                                                                    <PassCard
-                                                                        key={sub.id}
-                                                                        pass={{
-                                                                            id: String(sub.id),
-                                                                            name: originalPass?.name || '',
-                                                                            price: sub.price,
-                                                                            lessons_count: 0,
-                                                                            is_consecutive: sub.is_consecutive,
-                                                                            duration_days: sub.duration_days || originalPass?.duration_days
-                                                                        }}
-                                                                        groupsList={group ? [group] : []}
-                                                                        onClick={() => setEditingSub(sub)}
-                                                                        showChevron={false}
-                                                                        totalLessons={sub.lessons_total}
-                                                                        startDate={cardDates.startDate}
-                                                                        endDate={cardDates.endDate}
-                                                                        endDateText={cardDates.endDateText}
-                                                                        endDatePending={cardDates.endDatePending}
-                                                                        warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
-                                                                    />
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </section>
-                                            )}
-
-                                            <div className="bg-ios-card dark:bg-zinc-900 rounded-2xl p-4 mt-4 shadow-sm border border-black/[0.02] dark:border-white/[0.02]">
-                                                <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-ios-gray">{t('passes') || 'Passes'}</span>
-                                                    <span className="font-medium text-ios-green">+{totalPassCredit}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-sm mt-2">
-                                                    <span className="text-ios-gray">{t('counted_lessons') || 'Sessions'}</span>
-                                                    <span className="font-medium text-ios-red">-{selectedFinanceAudit.lessonsOwed}</span>
-                                                </div>
-                                                <div className="border-t border-gray-100 dark:border-zinc-700 mt-3 pt-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="font-bold dark:text-white">
-                                                            {selectedFinanceAudit.balance >= 0 ? (t('surplus') || 'Remaining') : (t('debt') || 'Debt')}
-                                                        </span>
-                                                        <span className={cn(
-                                                            "font-bold text-lg",
-                                                            selectedFinanceBalance > 0 ? 'text-ios-green' : selectedFinanceBalance < 0 ? 'text-ios-red' : 'text-ios-gray'
-                                                        )}>
-                                                            {selectedFinanceBalance > 0 ? `+${selectedFinanceBalance}` : selectedFinanceBalance}
-                                                        </span>
+                                                {selectedActiveSubs.length > 0 && (
+                                                    <div className={cn(
+                                                        "divide-y divide-gray-100 dark:divide-zinc-800",
+                                                        !readOnly || isPassPickerOpen ? "border-t border-gray-100 dark:border-zinc-800" : ""
+                                                    )}>
+                                                        {selectedActiveSubs.map(sub => {
+                                                            const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
+                                                            const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
+                                                            const cardDates = getSubscriptionCardDates(sub);
+                                                            const passUsage = selectedFinanceAudit.passUsage.find(item => item.passId === sub.id);
+                                                            const lessonsUsed = passUsage?.lessonsUsed || 0;
+                                                            const lessonsRemaining = Math.max(sub.lessons_total - lessonsUsed, 0);
+                                                            return (
+                                                                <PassCard
+                                                                    key={sub.id}
+                                                                    flat
+                                                                    pass={{
+                                                                        id: String(sub.id),
+                                                                        name: originalPass?.name || '',
+                                                                        price: sub.price,
+                                                                        lessons_count: lessonsRemaining,
+                                                                        is_consecutive: sub.is_consecutive,
+                                                                        duration_days: sub.duration_days || originalPass?.duration_days
+                                                                    }}
+                                                                    groupsList={group ? [group] : []}
+                                                                    onClick={() => setEditingSub(sub)}
+                                                                    showChevron={false}
+                                                                    totalLessons={sub.lessons_total}
+                                                                    startDate={cardDates.startDate}
+                                                                    endDate={cardDates.endDate}
+                                                                    endDateText={cardDates.endDateText}
+                                                                    endDatePending={cardDates.endDatePending}
+                                                                    warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
+                                                                />
+                                                            );
+                                                        })}
                                                     </div>
-                                                </div>
-                                            </div>
+                                                )}
 
-                                            {coveredEntries.length > 0 && (
+                                                {selectedUsedSubs.length > 0 && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => setIsArchiveOpen(!isArchiveOpen)}
+                                                            className="w-full flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-zinc-800 text-ios-gray hover:text-ios-blue transition-colors group"
+                                                        >
+                                                            <div className="flex items-center gap-1.5">
+                                                                <h3 className="text-[10px] font-black uppercase tracking-widest">{t('used_passes')}</h3>
+                                                                <span className="text-[10px] font-bold opacity-50">({selectedUsedSubs.length})</span>
+                                                            </div>
+                                                            {isArchiveOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                        </button>
+
+                                                        {isArchiveOpen && (
+                                                            <div className="border-t border-gray-100 dark:border-zinc-800 divide-y divide-gray-100 dark:divide-zinc-800 opacity-60 hover:opacity-100 transition-opacity">
+                                                                {selectedUsedSubs.map((sub: Subscription) => {
+                                                                    const group = allGroupsRaw.find(g => String(g.id) === String(sub.group_id));
+                                                                    const originalPass = passes.find(p => String(p.id) === String(sub.tariff_id));
+                                                                    const cardDates = getSubscriptionCardDates(sub);
+                                                                    return (
+                                                                        <PassCard
+                                                                            key={sub.id}
+                                                                            flat
+                                                                            pass={{
+                                                                                id: String(sub.id),
+                                                                                name: originalPass?.name || '',
+                                                                                price: sub.price,
+                                                                                lessons_count: 0,
+                                                                                is_consecutive: sub.is_consecutive,
+                                                                                duration_days: sub.duration_days || originalPass?.duration_days
+                                                                            }}
+                                                                            groupsList={group ? [group] : []}
+                                                                            onClick={() => setEditingSub(sub)}
+                                                                            showChevron={false}
+                                                                            totalLessons={sub.lessons_total}
+                                                                            startDate={cardDates.startDate}
+                                                                            endDate={cardDates.endDate}
+                                                                            endDateText={cardDates.endDateText}
+                                                                            endDatePending={cardDates.endDatePending}
+                                                                            warningLabel={sub.is_paid === false ? t('unpaid') : undefined}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </section>
+
+                                            {lessonAuditEntries.length > 0 && (
                                                 <section className="mt-4">
-                                                    <h3 className="text-[10px] font-black text-ios-green uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
-                                                        <CheckCircle2 className="w-3 h-3" />
-                                                        {t('covered_lessons') || 'Covered'} ({coveredEntries.length})
-                                                    </h3>
-                                                    <div className="space-y-2">
-                                                        {coveredEntries.map(entry => (
-                                                            <LessonCard key={entry.lessonId} entry={entry} />
-                                                        ))}
+                                                    <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-zinc-800">
+                                                        {upcomingLessonEntries.length > 0 && (
+                                                            <button
+                                                                onClick={() => setIsUpcomingOpen(!isUpcomingOpen)}
+                                                                className="w-full flex items-center justify-between px-4 py-3 text-ios-gray hover:text-ios-blue transition-colors group"
+                                                            >
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <h3 className="text-[10px] font-black uppercase tracking-widest">{t('upcoming') || 'Upcoming'}</h3>
+                                                                    <span className="text-[10px] font-bold opacity-50">({upcomingLessonEntries.length})</span>
+                                                                </div>
+                                                                {isUpcomingOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                            </button>
+                                                        )}
+
+                                                        {upcomingLessonEntries.length > 0 && isUpcomingOpen && (
+                                                            <div className="border-t border-gray-100 dark:border-zinc-800 divide-y divide-gray-100 dark:divide-zinc-800">
+                                                                {upcomingLessonEntries.map(entry => (
+                                                                    <LessonCard key={entry.lessonId} entry={entry} />
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {recentCurrentAndPastLessonEntries.length > 0 && (
+                                                            <div className={cn(
+                                                                "divide-y divide-gray-100 dark:divide-zinc-800",
+                                                                upcomingLessonEntries.length > 0 ? "border-t border-gray-100 dark:border-zinc-800" : ""
+                                                            )}>
+                                                                {recentCurrentAndPastLessonEntries.map(entry => (
+                                                                    <LessonCard key={entry.lessonId} entry={entry} />
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {earlierLessonEntries.length > 0 && (
+                                                            areEarlierLessonsContinuouslyPaid ? (
+                                                                <>
+                                                                    <button
+                                                                        onClick={() => setIsPaidLessonsOpen(!isPaidLessonsOpen)}
+                                                                        className={cn(
+                                                                            "w-full flex items-center justify-between px-4 py-3 text-ios-gray hover:text-ios-blue transition-colors group",
+                                                                            upcomingLessonEntries.length > 0 || recentCurrentAndPastLessonEntries.length > 0 ? "border-t border-gray-100 dark:border-zinc-800" : ""
+                                                                        )}
+                                                                    >
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <h3 className="text-[10px] font-black uppercase tracking-widest">{t('earlier') || 'Earlier'}</h3>
+                                                                            <span className="text-[10px] font-bold opacity-50">({earlierLessonEntries.length})</span>
+                                                                        </div>
+                                                                        {isPaidLessonsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                                    </button>
+
+                                                                    {isPaidLessonsOpen && (
+                                                                        <div className="border-t border-gray-100 dark:border-zinc-800 divide-y divide-gray-100 dark:divide-zinc-800">
+                                                                            {earlierLessonEntries.map(entry => (
+                                                                                <LessonCard key={entry.lessonId} entry={entry} />
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                <div className={cn(
+                                                                    "divide-y divide-gray-100 dark:divide-zinc-800",
+                                                                    upcomingLessonEntries.length > 0 || recentCurrentAndPastLessonEntries.length > 0 ? "border-t border-gray-100 dark:border-zinc-800" : ""
+                                                                )}>
+                                                                    {earlierLessonEntries.map(entry => (
+                                                                        <LessonCard key={entry.lessonId} entry={entry} />
+                                                                    ))}
+                                                                </div>
+                                                            )
+                                                        )}
                                                     </div>
                                                 </section>
                                             )}
 
-                                            {uncoveredEntries.length > 0 && (
-                                                <section className="mt-4">
-                                                    <h3 className="text-[10px] font-black text-ios-red uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
-                                                        <AlertCircle className="w-3 h-3" />
-                                                        {t('uncovered_lessons') || 'Uncovered'} ({uncoveredEntries.length})
-                                                    </h3>
-                                                    <div className="space-y-2">
-                                                        {uncoveredEntries.map(entry => (
-                                                            <LessonCard key={entry.lessonId} entry={entry} />
-                                                        ))}
-                                                    </div>
-                                                </section>
-                                            )}
-
-                                            {notCountedEntries.length > 0 && (
-                                                <section className="mt-4">
-                                                    <h3 className="text-[10px] font-black text-ios-gray uppercase tracking-widest flex items-center gap-1 mb-3 px-1">
-                                                        <XCircle className="w-3 h-3" />
-                                                        {t('not_counted_lessons') || 'Not Counted'} ({notCountedEntries.length})
-                                                    </h3>
-                                                    <div className="space-y-2">
-                                                        {notCountedEntries.map(entry => (
-                                                            <LessonCard key={entry.lessonId} entry={entry} />
-                                                        ))}
-                                                    </div>
-                                                </section>
-                                            )}
-
-                                            {selectedFinanceAudit.auditEntries.length === 0 && (
+                                            {lessonAuditEntries.length === 0 && (
                                                 <div className="py-12 text-center">
                                                     <Calendar className="w-12 h-12 text-ios-gray/30 mx-auto mb-3" />
                                                     <p className="text-ios-gray text-sm">{t('no_lessons_covered') || 'No attendance records yet'}</p>
                                                 </div>
                                             )}
                                         </>
-                                    ) : (
-                                        <div className="py-8 text-center bg-ios-background dark:bg-zinc-800 rounded-[24px] border-2 border-dashed border-gray-100 dark:border-zinc-700">
-                                            <AlertCircle className="w-8 h-8 text-ios-gray/30 mx-auto mb-2" />
-                                            <p className="text-ios-gray text-sm font-medium">{t('groups')}</p>
-                                        </div>
-                                    )}
+                                    ) : null}
                                 </section>
                             </>
                         )}
