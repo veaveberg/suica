@@ -240,6 +240,7 @@ export function calculateStudentGroupBalanceWithAudit(
             let covered = false;
             let candidatePassId: string | undefined = undefined;
             let dateMatchesConsecutivePass = false;
+            let dateMatchesNonConsumingPass = false;
 
             for (const pass of sortedPasses) {
                 if (passCoversDate(pass, lesson.date)) {
@@ -255,6 +256,7 @@ export function calculateStudentGroupBalanceWithAudit(
 
                     // New valid absences and legacy invalid absences only consume consecutive passes.
                     if ((isCurrentValidSkip || isLegacyInvalidSkip) && !pass.is_consecutive) {
+                        dateMatchesNonConsumingPass = true;
                         continue;
                     }
 
@@ -283,7 +285,7 @@ export function calculateStudentGroupBalanceWithAudit(
 
             // Allocation logic for uncovered lessons
             if (!covered) {
-                const shouldCountAsDebt = isPresent || isCurrentInvalidSkip || dateMatchesConsecutivePass;
+                const shouldCountAsDebt = isPresent || isCurrentInvalidSkip || (dateMatchesConsecutivePass && !dateMatchesNonConsumingPass);
 
                 if (shouldCountAsDebt) {
                     auditEntries.push({
