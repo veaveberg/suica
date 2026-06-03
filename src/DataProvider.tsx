@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import {
     useGroups,
@@ -87,33 +87,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
     }, [subscriptions.data, subscriptions.loading]);
 
+    const value = useMemo(() => ({
+        groups: groups.data,
+        students: students.data,
+        lessons: lessons.data,
+        subscriptions: subscriptions.data,
+        schedules: schedules.data,
+        studentGroups: studentGroups.data,
+        tariffs: tariffs.data,
+        passes: passes.data,
+        passGroups: passGroups.data,
+        attendance: attendance.data,
+        externalCalendars: externalCalendars.data,
+        loading,
+        refreshAll,
+        refreshGroups: groups.refresh,
+        refreshStudents: students.refresh,
+        refreshLessons: lessons.refresh,
+        refreshSubscriptions: subscriptions.refresh,
+        refreshSchedules: schedules.refresh,
+        refreshStudentGroups: studentGroups.refresh,
+        refreshTariffs: tariffs.refresh,
+        refreshPasses: passes.refresh,
+        refreshPassGroups: passGroups.refresh,
+        refreshAttendance: attendance.refresh,
+        refreshExternalCalendars: externalCalendars.refresh
+    }), [
+        groups.data,
+        students.data,
+        lessons.data,
+        subscriptions.data,
+        schedules.data,
+        studentGroups.data,
+        tariffs.data,
+        passes.data,
+        passGroups.data,
+        attendance.data,
+        externalCalendars.data,
+        loading
+    ]);
+
     return (
-        <DataContext.Provider value={{
-            groups: groups.data,
-            students: students.data,
-            lessons: lessons.data,
-            subscriptions: subscriptions.data,
-            schedules: schedules.data,
-            studentGroups: studentGroups.data,
-            tariffs: tariffs.data,
-            passes: passes.data,
-            passGroups: passGroups.data,
-            attendance: attendance.data,
-            externalCalendars: externalCalendars.data,
-            loading,
-            refreshAll,
-            refreshGroups: groups.refresh,
-            refreshStudents: students.refresh,
-            refreshLessons: lessons.refresh,
-            refreshSubscriptions: subscriptions.refresh,
-            refreshSchedules: schedules.refresh,
-            refreshStudentGroups: studentGroups.refresh,
-            refreshTariffs: tariffs.refresh,
-            refreshPasses: passes.refresh,
-            refreshPassGroups: passGroups.refresh,
-            refreshAttendance: attendance.refresh,
-            refreshExternalCalendars: externalCalendars.refresh
-        }}>
+        <DataContext.Provider value={value}>
             {children}
         </DataContext.Provider>
     );

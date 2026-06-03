@@ -15,7 +15,7 @@ import { useData } from '../DataProvider'
 import { syncLessonsFromSchedule } from '../db'
 import * as api from '../api'
 import { cn } from '../utils/cn'
-import { useSearchParams } from '../hooks/useSearchParams'
+import { useParam, useSetParam } from '../hooks/useSearchParams'
 import type { Language, Subscription } from '../types'
 
 export type TabId = 'classes' | 'groups' | 'students' | 'calendar' | 'passes'
@@ -27,6 +27,7 @@ interface TeacherAppProps {
     onChangeLanguage: (lang: Language) => void;
 }
 
+
 export const TeacherApp: React.FC<TeacherAppProps> = ({
     isDark,
     themeMode,
@@ -34,26 +35,25 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     onChangeLanguage
 }) => {
     const { t } = useTranslation()
-    const { getParam, setParam } = useSearchParams()
+    const setParam = useSetParam()
+    const tabParam = useParam('tab') as TabId | null
+    const sheetParam = useParam('sheet')
+    const studentIdParam = useParam('studentId')
+    const groupIdParam = useParam('groupId')
     const { convexUser } = useTelegram()
     const isStudentGlobal = convexUser?.role === 'student'
 
     // Sync Active Tab
-    const tabParam = getParam('tab') as TabId | null
     const isValidTab = (t: string | null): t is TabId =>
         ['classes', 'groups', 'students', 'calendar', 'passes'].includes(t || '')
     const activeTab = isValidTab(tabParam) ? tabParam : 'classes'
 
     const setActiveTab = (tab: TabId) => {
         setParam('tab', tab)
-        // Clear sheet param when changing tabs to be clean, or keep it? 
-        // Plan says "global sheets", settings is global.
-        // If we switch tabs, settings might stay open if it's an overlay.
-        // But activeTab state is mainly for the underlying view.
     }
 
     // Sync Settings Sheet
-    const showSettings = getParam('sheet') === 'settings'
+    const showSettings = sheetParam === 'settings'
     const setShowSettings = (show: boolean) => {
         if (show) {
             setParam('sheet', 'settings')
@@ -63,7 +63,6 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     }
 
     // Sync Student Sheet
-    const studentIdParam = getParam('studentId')
     const showStudent = !!studentIdParam
     const setShowStudent = (show: boolean) => {
         if (!show) {
@@ -75,7 +74,6 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     const selectedStudent = students.find(s => String(s.id) === studentIdParam) || null
 
     // Sync Group Sheet
-    const groupIdParam = getParam('groupId')
     const setShowGroup = (show: boolean) => {
         if (!show) {
             setParam('groupId', null)

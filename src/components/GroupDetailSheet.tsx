@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 import { updateGroup, archiveGroup, restoreGroup, deleteGroup, addScheduleSlot, deleteScheduleSlot, updateScheduleSlot, addStudentToGroup, removeStudentFromGroup, generateFutureLessons, syncLessonsFromSchedule } from '../db-server';
@@ -29,6 +29,8 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
     const [color, setColor] = useState(group.color);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [addingSlot, setAddingSlot] = useState(false);
+    const [isShaking, setIsShaking] = useState(false);
+    const isDirtyRef = useRef(false);
     const [newSlotDay, setNewSlotDay] = useState(1);
     const [newSlotTime, setNewSlotTime] = useState('19:00');
     const [newSlotFrequency, setNewSlotFrequency] = useState(1);
@@ -52,11 +54,21 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
 
     const { schedules: allSchedules, students: allStudents, studentGroups, refreshAll } = useData();
 
-    const schedules = allSchedules.filter(s => String(s.group_id) === String(group.id));
-    const memberAssignments = studentGroups.filter(sg => String(sg.group_id) === String(group.id));
+    const schedules = React.useMemo(() => {
+        return allSchedules.filter(s => String(s.group_id) === String(group.id));
+    }, [allSchedules, group.id]);
 
-    const memberIds = memberAssignments.map(a => String(a.student_id));
-    const members = allStudents.filter(s => memberIds.includes(String(s.id)));
+    const memberAssignments = React.useMemo(() => {
+        return studentGroups.filter(sg => String(sg.group_id) === String(group.id));
+    }, [studentGroups, group.id]);
+
+    const memberIds = React.useMemo(() => {
+        return memberAssignments.map(a => String(a.student_id));
+    }, [memberAssignments]);
+
+    const members = React.useMemo(() => {
+        return allStudents.filter(s => memberIds.includes(String(s.id)));
+    }, [allStudents, memberIds]);
 
     const handleAlignLessons = async () => {
         setIsSyncing(true);
@@ -170,19 +182,35 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
 
     return (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-            <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+            <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => {
+                    if (!isDirtyRef.current) {
+                        onClose();
+                        return;
+                    }
+
+                    const hasChanges = name.trim() !== group.name || color !== group.color;
+                    if (hasChanges) {
+                        setIsShaking(true);
+                        setTimeout(() => setIsShaking(false), 500);
+                    } else {
+                        onClose();
+                    }
+                }}
+            />
 
             <div className="relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col overscroll-y-contain">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                    <button onClick={onClose} className="p-1">
+                    <button onClick={onClose} className={`p-1 ${isShaking ? 'animate-shake' : ''}`}>
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
                     <h2 className="font-bold text-lg dark:text-white">
                         {isArchived ? t('archived_group') : t('edit_group')}
                     </h2>
                     {!isArchived && !isStudent && (
-                        <button onClick={handleSave} className="text-ios-blue font-semibold">
+                        <button onClick={handleSave} className={`text-ios-blue font-semibold ${isShaking ? 'animate-shake' : ''}`}>
                             {t('save')}
                         </button>
                     )}
@@ -196,7 +224,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                         <input
                             type="text"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => { setName(e.target.value); isDirtyRef.current = true; }}
                             disabled={isArchived || isStudent}
                             className="w-full mt-1 px-4 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white disabled:opacity-50"
                         />
@@ -209,7 +237,7 @@ export const GroupDetailSheet: React.FC<GroupDetailSheetProps> = ({ group, onClo
                             {GROUP_COLORS.map(c => (
                                 <button
                                     key={c}
-                                    onClick={() => !isArchived && !isStudent && setColor(c)}
+                                    onClick={() => { if (!isArchived && !isStudent) { setColor(c); isDirtyRef.current = true; } }}
                                     className={`w-8 h-8 rounded-full transition-transform ${color === c ? 'scale-125 ring-2 ring-offset-2 ring-ios-blue' : ''}`}
                                     style={{ backgroundColor: c }}
                                     disabled={isArchived || isStudent}

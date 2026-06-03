@@ -11,13 +11,14 @@ import { BalanceAuditSheet } from './BalanceAuditSheet';
 import { useMemo } from 'react';
 import { getScheduleSummary } from '../utils/formatting';
 import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
-import { useSearchParams } from '../hooks/useSearchParams';
+import { useParam, useSetParam } from '../hooks/useSearchParams';
 import { createGroup } from '../db-server';
 import { GROUP_COLORS } from '../constants/colors';
 
-export const GroupsView: React.FC = () => {
+export const GroupsView: React.FC = React.memo(() => {
     const { t, i18n } = useTranslation();
-    const { getParam, setParam } = useSearchParams();
+    const groupIdParam = useParam('groupId');
+    const setParam = useSetParam();
     const [showArchived, setShowArchived] = useState(false);
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudentGlobal = convexUser?.role === 'student';
@@ -66,7 +67,6 @@ export const GroupsView: React.FC = () => {
 
     const archivedGroups = groups.filter(g => g.status === 'archived');
 
-    const groupIdParam = getParam('groupId');
     const selectedGroup = groups.find(g => String(g.id) === groupIdParam) || null;
 
     const isOwner = selectedGroup?.userId === String(currentTgId);
@@ -380,4 +380,4 @@ export const GroupsView: React.FC = () => {
             )}
         </div>
     );
-};
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -23,12 +23,15 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
     const [name, setName] = useState('');
     const [tgUsername, setTgUsername] = useState('');
     const [igUsername, setIgUsername] = useState('');
+    const [isShaking, setIsShaking] = useState(false);
+    const isDirtyRef = useRef(false);
 
     useEffect(() => {
         if (user && isOpen) {
             setName(user.name || '');
             setTgUsername(user.username || '');
             setIgUsername(user.instagram_username || '');
+            isDirtyRef.current = false;
         }
     }, [user, isOpen]);
 
@@ -51,18 +54,37 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
 
     return (
         <div className={`fixed inset-0 z-[60] flex items-end sm:items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => {
+                    if (!isDirtyRef.current) {
+                        onClose();
+                        return;
+                    }
+
+                    const hasChanges = name.trim() !== (user.name || '') ||
+                        tgUsername.replace(/@/g, '').trim() !== (user.username || '') ||
+                        igUsername.replace(/@/g, '').trim() !== (user.instagram_username || '');
+
+                    if (hasChanges) {
+                        setIsShaking(true);
+                        setTimeout(() => setIsShaking(false), 500);
+                    } else {
+                        onClose();
+                    }
+                }}
+            />
 
             <div className={`relative w-full max-w-lg bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl p-6 pb-12 space-y-6 transition-transform duration-300 transform ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <button onClick={onClose} className="p-1">
+                    <button onClick={onClose} className={`p-1 ${isShaking ? 'animate-shake' : ''}`}>
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
                     <h2 className="text-xl font-bold dark:text-white">{t('edit_profile')}</h2>
                     <button
                         onClick={handleSave}
-                        className="text-ios-blue font-semibold"
+                        className={`text-ios-blue font-semibold ${isShaking ? 'animate-shake' : ''}`}
                     >
                         {t('save')}
                     </button>
@@ -75,7 +97,7 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
                         <input
                             type="text"
                             value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            onChange={(e) => { setName(e.target.value); isDirtyRef.current = true; }}
                             className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                             placeholder={t('your_name') || 'Your Name'}
                         />
@@ -89,7 +111,7 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
                             <input
                                 type="text"
                                 value={tgUsername}
-                                onChange={(e) => setTgUsername(e.target.value)}
+                                onChange={(e) => { setTgUsername(e.target.value); isDirtyRef.current = true; }}
                                 className="w-full pl-9 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                 placeholder="username"
                             />
@@ -104,7 +126,7 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
                             <input
                                 type="text"
                                 value={igUsername}
-                                onChange={(e) => setIgUsername(e.target.value)}
+                                onChange={(e) => { setIgUsername(e.target.value); isDirtyRef.current = true; }}
                                 className="w-full pl-9 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                 placeholder="username"
                             />

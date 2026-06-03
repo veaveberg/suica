@@ -98,10 +98,16 @@ export function calculateStudentGroupBalanceWithAudit(
     // Get all lessons for this group
     const groupLessons = lessons.filter(l => String(l.group_id) === String(groupId));
 
+    // Build a map of lesson ID to lesson for O(1) lookups
+    const lessonMap = new Map<string, Lesson>();
+    for (const l of lessons) {
+        lessonMap.set(String(l.id), l);
+    }
+
     // Get all attendance records for this student in this group
     const studentAttendance = attendance.filter(a => {
         if (String(a.student_id) !== String(studentId)) return false;
-        const lesson = lessons.find(l => String(l.id) === String(a.lesson_id));
+        const lesson = lessonMap.get(String(a.lesson_id));
         return lesson && String(lesson.group_id) === String(groupId);
     });
 
@@ -389,10 +395,15 @@ export function calculateStudentBalance(
         .filter(s => String(s.user_id) === String(studentId))
         .forEach(s => groupIds.add(String(s.group_id)));
 
+    const lessonMap = new Map<string, Lesson>();
+    for (const l of lessons) {
+        lessonMap.set(String(l.id), l);
+    }
+
     attendance
         .filter(a => String(a.student_id) === String(studentId))
         .forEach(a => {
-            const lesson = lessons.find(l => String(l.id) === String(a.lesson_id));
+            const lesson = lessonMap.get(String(a.lesson_id));
             if (lesson) groupIds.add(String(lesson.group_id));
         });
 

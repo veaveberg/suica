@@ -282,12 +282,6 @@ export const backdoorLogin = mutation({
         targetTelegramId: v.number(),
     },
     handler: async (ctx, args) => {
-        // Strict rate limit on backdoor login — 3 attempts per hour per target user.
-        await rateLimiter.limit(ctx, "backdoorLogin", {
-            key: String(args.targetTelegramId),
-            throws: true,
-        });
-
         if (process.env.ALLOW_BACKDOOR_LOGIN !== "true") {
             throw new Error("Backdoor login is disabled");
         }
@@ -295,7 +289,14 @@ export const backdoorLogin = mutation({
         if (!expectedSecret) {
             throw new Error("Backdoor login is not configured");
         }
-        if (!safeEqual(args.accessSecret, expectedSecret)) {
+
+        const isSecretValid = safeEqual(args.accessSecret, expectedSecret);
+        if (!isSecretValid) {
+            // Strict rate limit on failed backdoor login attempts — 3 attempts per hour.
+            await rateLimiter.limit(ctx, "backdoorLogin", {
+                key: String(args.targetTelegramId),
+                throws: true,
+            });
             throw new Error("Invalid backdoor credentials");
         }
 

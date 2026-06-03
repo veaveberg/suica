@@ -7,19 +7,20 @@ import { TelegramIcon } from './Icons';
 import { PassDetailSheet } from './PassDetailSheet';
 import { PassCard } from './PassCard';
 
-import { useSearchParams } from '../hooks/useSearchParams';
+import { useParam, useSetParam } from '../hooks/useSearchParams';
 import type { Pass } from '../types';
 
-export const PassesView: React.FC = () => {
+export const PassesView: React.FC = React.memo(() => {
     const { t } = useTranslation();
-    const { getParam, setParam } = useSearchParams();
+    const sheetParam = useParam('sheet');
+    const setParam = useSetParam();
     const { passes, groups, passGroups, loading } = useData();
     const { convexUser, userId: currentTgId } = useTelegram();
     const [selectedPassId, setSelectedPassId] = useState<string | null>(null);
 
     const isStudentGlobal = convexUser?.role === 'student';
 
-    const isCreateOpen = getParam('sheet') === 'create_pass';
+    const isCreateOpen = sheetParam === 'create_pass';
     const setIsCreateOpen = (val: boolean) => {
         if (val) setParam('sheet', 'create_pass');
         else setParam('sheet', null);
@@ -177,4 +178,4 @@ export const PassesView: React.FC = () => {
             {/* Student Interest Popup - REMOVED per user request */}
         </div>
     );
-};
+});

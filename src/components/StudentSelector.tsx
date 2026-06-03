@@ -4,7 +4,7 @@ import { Search, Check, UserPlus } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
 import * as api from '../api';
-import { useSearchParams } from '../hooks/useSearchParams';
+import { useSetParam } from '../hooks/useSearchParams';
 import type { Student } from '../types';
 import { cn } from '../utils/cn';
 
@@ -26,7 +26,7 @@ export const StudentSelector: React.FC<StudentSelectorProps> = ({
     const { t } = useTranslation();
     const { refreshStudents } = useData();
     const { userId: currentTgId } = useTelegram();
-    const { setParam } = useSearchParams();
+    const setParam = useSetParam();
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedIds));
     const [isCreating, setIsCreating] = useState(false);

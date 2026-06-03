@@ -28,7 +28,10 @@ function useDataQuery<T>(query: any, userId?: string, skip: boolean = false) {
     const authToken = getAuthToken();
     const hasValidAuth = !!userId && !!authToken && !isAuthTokenExpired(authToken) && !skip;
     const data = useQuery(query, hasValidAuth ? { userId: userId as Id<"users">, authToken } : "skip");
-    const mappedData = (data || []).map((item: any) => ({ ...item, id: item._id }));
+    // Memoize the mapped data to keep array references stable unless query data changes
+    const mappedData = React.useMemo(() => {
+        return (data || []).map((item: any) => ({ ...item, id: item._id }));
+    }, [data]);
     const loading = hasValidAuth ? data === undefined : false;
 
     // Memoize refresh to prevent unnecessary effect triggers in consumers

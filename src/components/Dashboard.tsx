@@ -8,8 +8,8 @@ import { useData } from '../DataProvider';
 import { deleteLessons } from '../db-server';
 import { cn } from '../utils/cn';
 import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting';
-import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
-import { useSearchParams } from '../hooks/useSearchParams';
+import { getCachedEvents, fetchAllExternalEvents, openExternalEvent } from '../utils/ical';
+import { useParam, useSetParam } from '../hooks/useSearchParams';
 import type { ExternalEvent } from '../types';
 import { LessonSelectionToolbar } from './LessonSelectionToolbar';
 
@@ -24,7 +24,7 @@ interface DashboardProps {
 
 const BATCH_SIZE = 20;
 
-export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, isSelectionMode = false, onSelectionModeChange, externalEventsRefresh, isActive }) => {
+export const Dashboard: React.FC<DashboardProps> = React.memo(({ lessons: fallbackLessons, isSelectionMode = false, onSelectionModeChange, externalEventsRefresh, isActive }) => {
     const { t, i18n } = useTranslation();
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [pastLessonsCount, setPastLessonsCount] = useState(BATCH_SIZE);
@@ -33,18 +33,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     const isStudent = convexUser?.role === 'student';
     // Prioritize lessons from useData, but fallback to props if needed for some reason
     const lessons = dataLessons || fallbackLessons;
-    const { getParam, setParam } = useSearchParams();
+    const lessonIdParam = useParam('lessonId');
+    const setParam = useSetParam();
 
     // Sync selected lesson with URL param
     useEffect(() => {
-        const lessonId = getParam('lessonId');
-        if (lessonId && lessons.length > 0) {
-            const found = lessons.find(l => l.id === lessonId);
+        if (lessonIdParam && lessons.length > 0) {
+            const found = lessons.find(l => l.id === lessonIdParam);
             if (found) {
                 setSelectedLesson(found);
             }
         }
-    }, [getParam, lessons]);
+    }, [lessonIdParam, lessons]);
 
     // Current user's student IDs across all schools they might be in
     const myStudentIds = useMemo(() => {
@@ -133,23 +133,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
     };
 
     // Render external events for a specific date
-    const renderExternalEventsForDate = (dateStr: string) => {
-        // Parse YYYY-MM-DD as local date to avoid UTC shifts
-        const [y, m, d] = dateStr.split('-').map(Number);
-        const date = new Date(y, m - 1, d);
+    const renderExternalEventsForDate = (dayEvents: ExternalEvent[]) => {
+        if (!dayEvents || dayEvents.length === 0) return null;
 
-        const events = getExternalEventsForDate(externalEvents, date).sort((a, b) => {
+        const sortedEvents = [...dayEvents].sort((a, b) => {
             if (a.allDay && !b.allDay) return -1;
             if (!a.allDay && b.allDay) return 1;
             return a.start.getTime() - b.start.getTime();
         });
 
-        if (events.length === 0) return null;
-
-
         return (
             <div className="space-y-1 mb-2">
-                {events.map(event => {
+                {sortedEvents.map(event => {
                     const startTime = `${event.start.getHours().toString().padStart(2, '0')}:${event.start.getMinutes().toString().padStart(2, '0')}`;
                     const endTime = `${event.end.getHours().toString().padStart(2, '0')}:${event.end.getMinutes().toString().padStart(2, '0')}`;
                     return (
@@ -559,7 +554,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                             <span className="text-sm font-semibold text-ios-gray px-1 uppercase tracking-wider">
                                 {formatDate(dateStr, i18n)}
                             </span>
-                            {renderExternalEventsForDate(dateStr)}
+                            {renderExternalEventsForDate(timeline.daysMap[dateStr]?.events)}
                             {timeline.daysMap[dateStr].lessons.map(l => renderLesson(l))}
                         </div>
                     ))}
@@ -572,11 +567,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                             </span>
                         </div>
                         {/* External events for today */}
-                        {renderExternalEventsForDate(today)}
-                        {timeline.daysMap[today].lessons.length === 0 && (getExternalEventsForDate(externalEvents, (() => {
-                            const [y, m, d] = today.split('-').map(Number);
-                            return new Date(y, m - 1, d);
-                        })()).length === 0) ? (
+                        {renderExternalEventsForDate(timeline.daysMap[today]?.events)}
+                        {timeline.daysMap[today].lessons.length === 0 && timeline.daysMap[today].events.length === 0 ? (
                             <p className="text-ios-gray text-sm py-2">{t('no_classes_today') || 'No classes today'}</p>
                         ) : (
                             timeline.daysMap[today].lessons.map(l => renderLesson(l))
@@ -589,7 +581,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                             <span className="text-sm font-semibold text-ios-gray px-1 uppercase tracking-wider">
                                 {formatDate(dateStr, i18n)}
                             </span>
-                            {renderExternalEventsForDate(dateStr)}
+                            {renderExternalEventsForDate(timeline.daysMap[dateStr]?.events)}
                             {timeline.daysMap[dateStr].lessons.map(l => renderLesson(l))}
                         </div>
                     ))}
@@ -635,4 +627,4 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
             </button>
         </div>
     );
-};
+});

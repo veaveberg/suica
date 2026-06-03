@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Trash2, Clock, Calendar, ChevronsRight, Check } from 'lucide-react';
 import { useData } from '../DataProvider';
@@ -42,6 +42,8 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
     const [expiryDate, setExpiryDate] = useState<string | undefined>('');
     const [isPaid, setIsPaid] = useState(true);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isShaking, setIsShaking] = useState(false);
+    const isDirtyRef = useRef(false);
 
     useEffect(() => {
         if (subscription && isOpen) {
@@ -53,6 +55,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
             setExpiryDate(subscription.expiry_date);
             setIsPaid(subscription.is_paid !== false);
             setIsDeleting(false);
+            isDirtyRef.current = false;
         }
     }, [subscription, isOpen]);
 
@@ -127,19 +130,41 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
 
     return (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => {
+                    if (!isDirtyRef.current) {
+                        onClose();
+                        return;
+                    }
+
+                    const hasChanges = price !== String(subscription.price) ||
+                        lessonsTotal !== String(subscription.lessons_total) ||
+                        purchaseDate !== subscription.purchase_date ||
+                        durationDays !== String(subscription.duration_days || '') ||
+                        isConsecutive !== (subscription.is_consecutive || false) ||
+                        isPaid !== (subscription.is_paid !== false);
+
+                    if (hasChanges) {
+                        setIsShaking(true);
+                        setTimeout(() => setIsShaking(false), 500);
+                    } else {
+                        onClose();
+                    }
+                }}
+            />
 
             <div className="relative w-full max-w-lg bg-ios-background dark:bg-black rounded-t-3xl sm:rounded-3xl flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-zinc-800 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl sticky top-0 z-10">
-                    <button onClick={onClose} className="text-ios-blue font-medium">{t('cancel')}</button>
+                    <button onClick={onClose} className={`text-ios-blue font-medium ${isShaking ? 'animate-shake' : ''}`}>{t('cancel')}</button>
                     <h2 className="text-lg font-bold dark:text-white">
                         {subscription.id ? `${t('edit')} ${subscription.type}` : t('buy_subscription')}
                     </h2>
                     <button
                         onClick={handleSave}
                         disabled={!price || !lessonsTotal || !purchaseDate}
-                        className="text-ios-blue font-bold disabled:opacity-30"
+                        className={`text-ios-blue font-bold disabled:opacity-30 ${isShaking ? 'animate-shake' : ''}`}
                     >
                         {t('save')}
                     </button>
@@ -158,7 +183,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                                 <input
                                     type="number"
                                     value={price}
-                                    onChange={(e) => setPrice(e.target.value)}
+                                    onChange={(e) => { setPrice(e.target.value); isDirtyRef.current = true; }}
                                     className="w-full bg-transparent border-none p-0 focus:ring-0 font-medium dark:text-white"
                                 />
                             </div>
@@ -174,7 +199,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                                 <input
                                     type="number"
                                     value={lessonsTotal}
-                                    onChange={(e) => setLessonsTotal(e.target.value)}
+                                    onChange={(e) => { setLessonsTotal(e.target.value); isDirtyRef.current = true; }}
                                     className="w-full bg-transparent border-none p-0 focus:ring-0 font-medium dark:text-white"
                                 />
                             </div>
@@ -190,7 +215,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                                 <input
                                     type="date"
                                     value={purchaseDate}
-                                    onChange={(e) => setPurchaseDate(e.target.value)}
+                                    onChange={(e) => { setPurchaseDate(e.target.value); isDirtyRef.current = true; }}
                                     className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium dark:text-white"
                                 />
                             </div>
@@ -198,7 +223,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
 
                         {/* Consecutive Toggle */}
                         <button
-                            onClick={() => setIsConsecutive(!isConsecutive)}
+                            onClick={() => { setIsConsecutive(!isConsecutive); isDirtyRef.current = true; }}
                             className="w-full flex items-center justify-between px-4 py-3 text-left"
                         >
                             <div className="flex items-center gap-3">
@@ -213,7 +238,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                         </button>
 
                         <button
-                            onClick={() => setIsPaid(!isPaid)}
+                            onClick={() => { setIsPaid(!isPaid); isDirtyRef.current = true; }}
                             className="w-full flex items-center justify-between px-4 py-3 text-left"
                         >
                             <div className="flex items-center gap-3">
@@ -245,7 +270,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                                     <input
                                         type="number"
                                         value={durationDays}
-                                        onChange={(e) => setDurationDays(e.target.value)}
+                                        onChange={(e) => { setDurationDays(e.target.value); isDirtyRef.current = true; }}
                                         placeholder="30"
                                         className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium dark:text-white"
                                     />

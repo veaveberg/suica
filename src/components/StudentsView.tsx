@@ -6,7 +6,7 @@ import { useData } from '../DataProvider';
 import * as api from '../api';
 import type { Student, Subscription } from '../types';
 import { calculateStudentGroupBalance } from '../utils/balance';
-import { useSearchParams } from '../hooks/useSearchParams';
+import { useSetParam } from '../hooks/useSearchParams';
 
 function getTodayLocalDate(): string {
     const now = new Date();
@@ -21,13 +21,13 @@ interface StudentsViewProps {
     subscriptions: Subscription[];
 }
 
-export const StudentsView: React.FC<StudentsViewProps> = ({
+export const StudentsView: React.FC<StudentsViewProps> = React.memo(({
     students,
     subscriptions
 }) => {
     const { t } = useTranslation();
     const [search, setSearch] = useState('');
-    const { setParam } = useSearchParams();
+    const setParam = useSetParam();
     const [showArchived, setShowArchived] = useState(false);
     const { convexUser, userId: currentTgId } = useTelegram();
     const isStudent = convexUser?.role === 'student';
@@ -245,4 +245,4 @@ export const StudentsView: React.FC<StudentsViewProps> = ({
 
         </div>
     );
-};
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, AtSign, Instagram } from 'lucide-react';
 import type { Student } from '../types';
@@ -19,6 +19,8 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
     const [igUsername, setIgUsername] = useState('');
     const [notes, setNotes] = useState('');
     const [groupId, setGroupId] = useState('');
+    const [isShaking, setIsShaking] = useState(false);
+    const isDirtyRef = useRef(false);
 
     const { groups, refreshStudents, refreshStudentGroups } = useData();
     const activeGroups = groups.filter(g => g.status === 'active');
@@ -42,6 +44,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
             } else {
                 setGroupId('');
             }
+            isDirtyRef.current = false;
         }
     }, [isOpen, activeGroups]);
 
@@ -69,12 +72,34 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
 
     return (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => {
+                    if (!isDirtyRef.current) {
+                        onClose();
+                        return;
+                    }
+
+                    const defaultGroupId = activeGroups[0]?.id?.toString() || '';
+                    const hasChanges = name.trim() !== '' ||
+                        tgUsername.trim() !== '' ||
+                        igUsername.trim() !== '' ||
+                        notes.trim() !== '' ||
+                        (groupId !== defaultGroupId && defaultGroupId !== '');
+
+                    if (hasChanges) {
+                        setIsShaking(true);
+                        setTimeout(() => setIsShaking(false), 500);
+                    } else {
+                        onClose();
+                    }
+                }}
+            />
 
             <div className={`relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl transition-transform duration-300 transform flex flex-col ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                    <button onClick={onClose} className="p-1">
+                    <button onClick={onClose} className={`p-1 ${isShaking ? 'animate-shake' : ''}`}>
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
                     <h2 className="font-bold text-lg dark:text-white">
@@ -83,7 +108,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                     <button
                         onClick={handleSave}
                         disabled={!name.trim()}
-                        className="text-ios-blue font-semibold disabled:opacity-50"
+                        className={`text-ios-blue font-semibold disabled:opacity-50 ${isShaking ? 'animate-shake' : ''}`}
                     >
                         {t('save')}
                     </button>
@@ -101,7 +126,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                                 autoFocus
                                 type="text"
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(e) => { setName(e.target.value); isDirtyRef.current = true; }}
                                 className="w-full mt-1 px-4 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white"
                                 placeholder={t('student_name')}
                                 required
@@ -116,7 +141,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                                 <div className="relative mt-1">
                                     <select
                                         value={groupId}
-                                        onChange={(e) => setGroupId(e.target.value)}
+                                        onChange={(e) => { setGroupId(e.target.value); isDirtyRef.current = true; }}
                                         className="w-full pl-3 pr-3 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white appearance-none border-none focus:ring-0"
                                     >
                                         <option value="">{t('select_group')}</option>
@@ -142,7 +167,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                                 <input
                                     type="text"
                                     value={tgUsername}
-                                    onChange={(e) => setTgUsername(e.target.value)}
+                                    onChange={(e) => { setTgUsername(e.target.value); isDirtyRef.current = true; }}
                                     className="w-full pl-9 pr-3 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white"
                                     placeholder="username"
                                 />
@@ -158,7 +183,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                                 <input
                                     type="text"
                                     value={igUsername}
-                                    onChange={(e) => setIgUsername(e.target.value)}
+                                    onChange={(e) => { setIgUsername(e.target.value); isDirtyRef.current = true; }}
                                     className="w-full pl-9 pr-3 py-3 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white"
                                     placeholder="username"
                                 />
@@ -173,7 +198,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({ isOpen, onClos
                         </label>
                         <textarea
                             value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
+                            onChange={(e) => { setNotes(e.target.value); isDirtyRef.current = true; }}
                             className="w-full px-4 py-3 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-2xl resize-none"
                             placeholder={t('note') || 'Note'}
                             rows={3}

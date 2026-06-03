@@ -9,7 +9,7 @@ import { api as convexApi } from '../../convex/_generated/api';
 import { useQuery } from 'convex/react';
 import { cancelLesson, uncancelLesson, deleteLesson } from '../db-server';
 import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting';
-import { useSearchParams } from '../hooks/useSearchParams';
+import { useSetParam } from '../hooks/useSearchParams';
 import { cn } from '../utils/cn';
 import { calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import type { Attendance } from '../types';
@@ -41,7 +41,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
         return lessons.find(l => l.id === propLesson.id) || propLesson;
     }, [propLesson, lessons]);
 
-    const { setParam } = useSearchParams();
+    const setParam = useSetParam();
     const { convexUser, userId: currentTgId } = useTelegram();
     const isAdmin = convexUser?.role === 'admin';
     const isOwner = lesson?.userId === String(currentTgId);
@@ -59,6 +59,17 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
     const isLongPressRef = useRef(false);
     const [showStudentSelector, setShowStudentSelector] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
+    const [isShaking, setIsShaking] = useState(false);
+    const [isFullyMounted, setIsFullyMounted] = useState(false);
+    const isDirtyRef = useRef(false);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsFullyMounted(true);
+        }, 150);
+        return () => clearTimeout(timer);
+    }, []);
+
     const initialStateRef = useRef<{
         attendanceData: Record<string, AttendanceStatus | 'not_marked'>,
         notes: string,
@@ -85,7 +96,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
 
     // Memoize if a student has a pass specifically for THIS lesson
     const studentStatusMap = useMemo(() => {
-        if (!lesson) return {};
+        if (!lesson || !isFullyMounted) return {};
         const map: Record<string, {
             hasActivePass: boolean;
             isUncoveredPresent: boolean;
@@ -113,7 +124,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                 }
             }
 
-            // Virtual 'absence_invalid' check
+            // Virtual 'absence_valid' check
             const resValidSkip = calculateStudentGroupBalanceWithAudit(
                 s.id!, lesson.group_id, subscriptions,
                 [...allAttendance, { student_id: s.id!, lesson_id: lesson.id!, status: 'absence_valid' } as Attendance],
@@ -155,7 +166,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             };
         });
         return map;
-    }, [groupStudents, lesson, subscriptions, allAttendance, lessons]);
+    }, [groupStudents, lesson, subscriptions, allAttendance, lessons, isFullyMounted]);
 
     // Fetch revenue stats (Equation)
     const revenueStats = useQuery(convexApi.revenue.getRevenueStatsForLesson,
@@ -190,6 +201,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                         newTime: lesson.time,
                         newDuration: lesson.duration_minutes,
                     };
+                    isDirtyRef.current = false;
                 })
                 .catch(() => {
                     setAttendanceData({});
@@ -202,6 +214,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                         newTime: lesson.time,
                         newDuration: lesson.duration_minutes,
                     };
+                    isDirtyRef.current = false;
                 });
         } else {
             setAttendanceData({});
@@ -211,6 +224,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             setShowDeleteConfirm(false);
             setShowReschedule(false);
             initialStateRef.current = null;
+            isDirtyRef.current = false;
         }
     }, [lesson]);
 
@@ -338,6 +352,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                 ...prev,
                 [student.id!]: newStatus
             }));
+            isDirtyRef.current = true;
             if (!isStudent && !silent && navigator.vibrate) navigator.vibrate(10);
         };
 
@@ -524,14 +539,56 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
         );
     };
 
+    const checkHasChanges = () => {
+        const initial = initialStateRef.current;
+        if (!initial) return false;
+
+        // Check attendance changes
+        const attendanceKeys = new Set([
+            ...Object.keys(attendanceData),
+            ...Object.keys(initial.attendanceData)
+        ]);
+        for (const key of attendanceKeys) {
+            const currentVal = attendanceData[key] || 'not_marked';
+            const initialVal = initial.attendanceData[key] || 'not_marked';
+            if (currentVal !== initialVal) return true;
+        }
+
+        // Check text fields and states
+        if (notes !== initial.notes) return true;
+        if (infoForStudents !== initial.infoForStudents) return true;
+        if (isCompleted !== initial.isCompleted) return true;
+        if (newDate !== initial.newDate) return true;
+        if (newTime !== initial.newTime) return true;
+        if (Number(newDuration) !== Number(initial.newDuration)) return true;
+
+        return false;
+    };
+
     return (
         <div className={cn("fixed inset-0 flex items-end sm:items-center justify-center", zIndexClass || "z-[80]")}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleSheetClose} />
+            <div
+                className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => {
+                    if (!isDirtyRef.current) {
+                        handleSheetClose();
+                        return;
+                    }
+
+                    const hasChanges = checkHasChanges();
+                    if (hasChanges) {
+                        setIsShaking(true);
+                        setTimeout(() => setIsShaking(false), 500);
+                    } else {
+                        handleSheetClose();
+                    }
+                }}
+            />
 
             <div className="relative w-full max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                    <button onClick={handleSheetClose} className="p-1">
+                    <button onClick={handleSheetClose} className={cn("p-1", isShaking && "animate-shake")}>
                         <X className="w-6 h-6 text-ios-gray" />
                     </button>
                     <div className="flex-1 flex justify-center min-w-0 px-2">
@@ -544,7 +601,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                         </h2>
                     </div>
                     {!isStudent ? (
-                        <button onClick={handleSave} className="text-ios-blue font-semibold">
+                        <button onClick={handleSave} className={cn("text-ios-blue font-semibold", isShaking && "animate-shake")}>
                             {t('save')}
                         </button>
                     ) : (
@@ -620,7 +677,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                                     <input
                                                         type="date"
                                                         value={newDate}
-                                                        onChange={(e) => setNewDate(e.target.value)}
+                                                        onChange={(e) => { setNewDate(e.target.value); isDirtyRef.current = true; }}
                                                         className="w-full py-2.5 pl-2 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                                                     />
                                                 </div>
@@ -632,7 +689,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                                     <input
                                                         type="time"
                                                         value={newTime}
-                                                        onChange={(e) => setNewTime(e.target.value)}
+                                                        onChange={(e) => { setNewTime(e.target.value); isDirtyRef.current = true; }}
                                                         className="w-full py-2.5 pl-2 bg-transparent dark:text-white text-base border-none focus:ring-0 outline-none [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                                                     />
                                                 </div>
@@ -646,7 +703,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                                         inputMode="numeric"
                                                         pattern="[0-9]*"
                                                         value={newDuration}
-                                                        onChange={(e) => setNewDuration(e.target.value)}
+                                                        onChange={(e) => { setNewDuration(e.target.value); isDirtyRef.current = true; }}
                                                         onFocus={(e) => e.target.select()}
                                                         onBlur={() => {
                                                             if (newDuration === '') setNewDuration(0);
@@ -775,7 +832,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                             <div className="pt-2">
                                 <div className="flex p-1 bg-ios-background dark:bg-zinc-800 rounded-xl">
                                     <button
-                                        onClick={() => !isStudent && setIsCompleted(false)}
+                                        onClick={() => { !isStudent && setIsCompleted(false); isDirtyRef.current = true; }}
                                         className={`flex-1 py-3 rounded-lg font-medium transition-all ${!isCompleted
                                             ? 'bg-white dark:bg-zinc-700 text-ios-blue shadow-sm'
                                             : 'text-ios-gray'
@@ -784,7 +841,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                         {t('status_not_marked_yet') || 'Not marked yet'}
                                     </button>
                                     <button
-                                        onClick={() => !isStudent && setIsCompleted(true)}
+                                        onClick={() => { !isStudent && setIsCompleted(true); isDirtyRef.current = true; }}
                                         className={`flex-1 py-3 rounded-lg font-medium transition-all ${isCompleted
                                             ? 'bg-white dark:bg-zinc-700 text-ios-green shadow-sm'
                                             : 'text-ios-gray'
@@ -803,7 +860,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                 </label>
                                 <textarea
                                     value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
+                                    onChange={(e) => { setNotes(e.target.value); isDirtyRef.current = true; }}
                                     readOnly={isStudent}
                                     className="w-full p-4 rounded-2xl bg-ios-background dark:bg-zinc-800 border-none focus:ring-2 focus:ring-ios-blue min-h-[80px] resize-none dark:text-white"
                                     placeholder="..."
@@ -817,7 +874,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                 </label>
                                 <textarea
                                     value={infoForStudents}
-                                    onChange={(e) => setInfoForStudents(e.target.value)}
+                                    onChange={(e) => { setInfoForStudents(e.target.value); isDirtyRef.current = true; }}
                                     readOnly={isStudent}
                                     className="w-full p-4 rounded-2xl bg-ios-background dark:bg-zinc-800 border-none focus:ring-2 focus:ring-ios-blue min-h-[80px] resize-none dark:text-white"
                                     placeholder={t('info_for_students_placeholder') || '...'}

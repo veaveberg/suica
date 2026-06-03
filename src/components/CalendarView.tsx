@@ -9,7 +9,7 @@ import { LessonDetailSheet } from './LessonDetailSheet';
 import type { Lesson } from '../types';
 import { cn } from '../utils/cn';
 import { formatCurrency } from '../utils/formatting';
-import { getCachedEvents, fetchAllExternalEvents, getExternalEventsForDate, openExternalEvent } from '../utils/ical';
+import { getCachedEvents, fetchAllExternalEvents, openExternalEvent } from '../utils/ical';
 import type { ExternalEvent } from '../types';
 import { useScheduleFillMode } from './calendar/useScheduleFillMode';
 import { CalendarFloatingActions } from './calendar/CalendarFloatingActions';
@@ -33,7 +33,7 @@ interface DragState {
   hoverDate: string;
 }
 
-export const CalendarView: React.FC<CalendarViewProps> = ({
+export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
   onYearChange,
   externalEventsRefresh,
   isActive,
@@ -71,6 +71,32 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [isFetchingExternal, setIsFetchingExternal] = useState(true);
   const hasInteracted = useRef(false);
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([]);
+
+  // Pre-index external events by date string to avoid slow O(N) array scans during rendering of cells
+  const externalEventsByDate = useMemo(() => {
+    const map: Record<string, ExternalEvent[]> = {};
+    externalEvents.forEach(event => {
+      const start = new Date(event.start);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(event.end);
+      end.setHours(23, 59, 59, 999);
+      
+      const curr = new Date(start);
+      const limit = new Date(start);
+      limit.setDate(limit.getDate() + 31); // Safety bounds: max 31 days per event
+      
+      while (curr <= end && curr <= limit) {
+        const dateKey = `${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}-${String(curr.getDate()).padStart(2, '0')}`;
+        if (!map[dateKey]) {
+          map[dateKey] = [];
+        }
+        map[dateKey].push(event);
+        curr.setDate(curr.getDate() + 1);
+      }
+    });
+    return map;
+  }, [externalEvents]);
+
   const [todayButton, setTodayButton] = useState<{ show: boolean, direction: 'up' | 'down' }>({ show: false, direction: 'up' });
   const [dragState, setDragState] = useState<DragState | null>(null);
   const dragStartRef = useRef<{
@@ -840,7 +866,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       );
                     })}
 
-                    {getExternalEventsForDate(externalEvents, day).map(event => {
+                    {(externalEventsByDate[dateKey] || []).map(event => {
                       const startTime = format(event.start, 'HH:mm');
                       const endTime = format(event.end, 'HH:mm');
                       return (
@@ -1031,4 +1057,4 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
     </div>
   );
-};
+});

@@ -55,6 +55,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     onBuySubscription,
     readOnly = false
 }) => {
+
     const { t, i18n } = useTranslation();
 
     const [addingToGroup, setAddingToGroup] = useState(false);
@@ -75,9 +76,12 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const [selectedFinanceGroupId, setSelectedFinanceGroupId] = useState<string | null>(null);
     const [lessonStatusOverrides, setLessonStatusOverrides] = useState<Record<string, AttendanceStatus | 'not_marked'>>({});
     const [lessonAttendanceSaving, setLessonAttendanceSaving] = useState<Record<string, boolean>>({});
+    const [isShaking, setIsShaking] = useState(false);
+
     const lastInitializedId = React.useRef<string | null>(null);
     const initialAttendanceSnapshotRef = React.useRef<Record<string, { id?: string, status: AttendanceStatus | 'not_marked', payment_amount?: number }>>({});
     const changedLessonIdsRef = React.useRef<Set<string>>(new Set());
+    const isDirtyRef = React.useRef(false);
 
     const { groups: allGroupsRaw, studentGroups, refreshStudentGroups, refreshStudents, refreshAttendance, subscriptions: allSubscriptions, lessons, passes, passGroups, attendance } = useData();
     const activeGroups = allGroupsRaw.filter(g => g.status === 'active');
@@ -111,6 +115,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 );
                 changedLessonIdsRef.current = new Set();
                 lastInitializedId.current = student.id || null;
+                isDirtyRef.current = false;
             }
         } else if (!isOpen) {
             lastInitializedId.current = null;
@@ -124,11 +129,17 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             setSelectedFinanceGroupId(null);
             initialAttendanceSnapshotRef.current = {};
             changedLessonIdsRef.current = new Set();
+            isDirtyRef.current = false;
         }
     }, [student, isOpen, attendance]);
 
-    const memberAssignments = studentGroups.filter(sg => String(sg.student_id) === String(student?.id));
-    const memberGroupIds = memberAssignments.map(a => String(a.group_id));
+    const memberAssignments = React.useMemo(() => {
+        return studentGroups.filter(sg => String(sg.student_id) === String(student?.id));
+    }, [studentGroups, student?.id]);
+
+    const memberGroupIds = React.useMemo(() => {
+        return memberAssignments.map(a => String(a.group_id));
+    }, [memberAssignments]);
 
     const handleAddToGroup = async () => {
         if (selectedGroupId && student?.id) {
@@ -285,22 +296,85 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     const studentIdStr = String(student?.id ?? '');
     const isArchived = student?.status === 'archived';
 
-    const studentSubs = allSubscriptions.filter(s => String(s.user_id) === studentIdStr);
+    const studentSubs = React.useMemo(() => {
+        return allSubscriptions.filter(s => String(s.user_id) === studentIdStr);
+    }, [allSubscriptions, studentIdStr]);
 
-    const transactionGroupIds = new Set<string>();
-    allSubscriptions
-        .filter(s => String(s.user_id) === String(student?.id))
-        .forEach(s => transactionGroupIds.add(String(s.group_id)));
-    attendance
-        .filter(a => String(a.student_id) === String(student?.id))
-        .forEach(a => {
-            const lesson = lessons.find(l => String(l.id) === String(a.lesson_id));
-            if (lesson) transactionGroupIds.add(String(lesson.group_id));
+    const transactionGroupIds = React.useMemo(() => {
+        const set = new Set<string>();
+        allSubscriptions
+            .filter(s => String(s.user_id) === String(student?.id))
+            .forEach(s => set.add(String(s.group_id)));
+
+        // Speed up lesson lookup using a map
+        const lessonMap = new Map<string, Lesson>();
+        for (const l of lessons) {
+            lessonMap.set(String(l.id), l);
+        }
+
+        attendance
+            .filter(a => String(a.student_id) === String(student?.id))
+            .forEach(a => {
+                const lesson = lessonMap.get(String(a.lesson_id));
+                if (lesson) set.add(String(lesson.group_id));
+            });
+        return set;
+    }, [allSubscriptions, attendance, lessons, student?.id]);
+
+    const financeTabGroups = React.useMemo(() => {
+        return allGroupsRaw.filter(group =>
+            memberGroupIds.includes(String(group.id)) || transactionGroupIds.has(String(group.id))
+        );
+    }, [allGroupsRaw, memberGroupIds, transactionGroupIds]);
+
+    // Pre-calculate subscription card dates once to avoid recalculating consecutive expirations on every mapped cell
+    const subscriptionCardDates = React.useMemo(() => {
+        const cache = new Map<string, {
+            startDate: string;
+            endDate?: string;
+            endDateText?: string;
+            endDatePending: boolean;
+        }>();
+
+        studentSubs.forEach(sub => {
+            if (!sub.is_consecutive) {
+                cache.set(sub.id!, {
+                    startDate: sub.purchase_date,
+                    endDate: sub.expiry_date,
+                    endDatePending: false
+                });
+            } else {
+                const { expirationDate, missingLessons } = getConsecutiveSubscriptionExpiration(sub, lessons, attendance);
+                cache.set(sub.id!, {
+                    startDate: sub.purchase_date,
+                    endDate: expirationDate,
+                    endDateText: !expirationDate && missingLessons > 0
+                        ? t('lessons_not_assigned', { count: missingLessons })
+                        : undefined,
+                    endDatePending: !expirationDate
+                });
+            }
         });
 
-    const financeTabGroups = allGroupsRaw.filter(group =>
-        memberGroupIds.includes(String(group.id)) || transactionGroupIds.has(String(group.id))
-    );
+        return cache;
+    }, [studentSubs, lessons, attendance, t]);
+
+    // Pre-compute balance for each finance tab group to avoid calling calculateStudentGroupBalance inline in JSX
+    const balanceByGroupId = React.useMemo(() => {
+        const map = new Map<string, number>();
+        if (!student?.id) return map;
+        for (const group of financeTabGroups) {
+            const groupIdStr = String(group.id);
+            map.set(groupIdStr, calculateStudentGroupBalance(
+                student.id,
+                groupIdStr,
+                allSubscriptions,
+                attendance,
+                lessons
+            ).balance);
+        }
+        return map;
+    }, [financeTabGroups, student?.id, allSubscriptions, attendance, lessons]);
 
     useEffect(() => {
         if (financeTabGroups.length === 0) {
@@ -316,56 +390,85 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         }
     }, [financeTabGroups, selectedFinanceGroupId]);
 
-    const selectedFinanceGroup = financeTabGroups.find(group => String(group.id) === String(selectedFinanceGroupId)) || null;
-    const selectedFinanceAudit = selectedFinanceGroup && student?.id
-        ? calculateStudentGroupBalanceWithAudit(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons)
-        : null;
-    const selectedGroupSubs = selectedFinanceGroup
-        ? studentSubs.filter(sub => String(sub.group_id) === String(selectedFinanceGroup.id))
-        : [];
-    const selectedPassUsageById = new Map(
-        (selectedFinanceAudit?.passUsage || []).map(item => [String(item.passId), item])
-    );
-    const selectedUsedSubs = selectedGroupSubs.filter(sub => {
-        const usage = selectedPassUsageById.get(String(sub.id));
-        const lessonsRemaining = usage
-            ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
-            : sub.lessons_total;
-        const isArchived = sub.status === 'archived';
-        const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
-        return isArchived || isExpired || lessonsRemaining === 0;
-    }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
-    const selectedActiveSubs = selectedGroupSubs.filter(sub => {
-        const usage = selectedPassUsageById.get(String(sub.id));
-        const lessonsRemaining = usage
-            ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
-            : sub.lessons_total;
-        const isArchived = sub.status === 'archived';
-        const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
-        return !isArchived && !isExpired && lessonsRemaining > 0;
-    }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
-    const selectedGroupPasses = selectedFinanceGroup
-        ? passes.filter(pass =>
-            passGroups.some(
-                passGroup =>
-                    String(passGroup.pass_id) === String(pass.id) &&
-                    String(passGroup.group_id) === String(selectedFinanceGroup.id)
+    const selectedFinanceGroup = React.useMemo(() => {
+        return financeTabGroups.find(group => String(group.id) === String(selectedFinanceGroupId)) || null;
+    }, [financeTabGroups, selectedFinanceGroupId]);
+
+    const selectedFinanceAudit = React.useMemo(() => {
+        return selectedFinanceGroup && student?.id
+            ? calculateStudentGroupBalanceWithAudit(student.id, String(selectedFinanceGroup.id), allSubscriptions, attendance, lessons)
+            : null;
+    }, [selectedFinanceGroup, student?.id, allSubscriptions, attendance, lessons]);
+
+    const selectedGroupSubs = React.useMemo(() => {
+        return selectedFinanceGroup
+            ? studentSubs.filter(sub => String(sub.group_id) === String(selectedFinanceGroup.id))
+            : [];
+    }, [selectedFinanceGroup, studentSubs]);
+
+    const selectedPassUsageById = React.useMemo(() => {
+        return new Map(
+            (selectedFinanceAudit?.passUsage || []).map(item => [String(item.passId), item])
+        );
+    }, [selectedFinanceAudit]);
+
+    const selectedUsedSubs = React.useMemo(() => {
+        return selectedGroupSubs.filter(sub => {
+            const usage = selectedPassUsageById.get(String(sub.id));
+            const lessonsRemaining = usage
+                ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
+                : sub.lessons_total;
+            const isArchived = sub.status === 'archived';
+            const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
+            return isArchived || isExpired || lessonsRemaining === 0;
+        }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
+    }, [selectedGroupSubs, selectedPassUsageById, today]);
+
+    const selectedActiveSubs = React.useMemo(() => {
+        return selectedGroupSubs.filter(sub => {
+            const usage = selectedPassUsageById.get(String(sub.id));
+            const lessonsRemaining = usage
+                ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
+                : sub.lessons_total;
+            const isArchived = sub.status === 'archived';
+            const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
+            return !isArchived && !isExpired && lessonsRemaining > 0;
+        }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
+    }, [selectedGroupSubs, selectedPassUsageById, today]);
+
+    const selectedGroupPasses = React.useMemo(() => {
+        return selectedFinanceGroup
+            ? passes.filter(pass =>
+                passGroups.some(
+                    passGroup =>
+                        String(passGroup.pass_id) === String(pass.id) &&
+                        String(passGroup.group_id) === String(selectedFinanceGroup.id)
+                )
             )
-        )
-        : [];
-    const selectedGroupLessons = selectedFinanceGroup
-        ? lessons
-            .filter(lesson => String(lesson.group_id) === String(selectedFinanceGroup.id))
-            .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
-        : [];
-    const selectedAttendanceByLessonId = new Map(
-        attendance
-            .filter(item => String(item.student_id) === studentIdStr)
-            .map(item => [String(item.lesson_id), item])
-    );
-    const lessonAuditEntryByLessonId = new Map(
-        (selectedFinanceAudit?.auditEntries || []).map(entry => [entry.lessonId, entry])
-    );
+            : [];
+    }, [selectedFinanceGroup, passes, passGroups]);
+
+    const selectedGroupLessons = React.useMemo(() => {
+        return selectedFinanceGroup
+            ? lessons
+                .filter(lesson => String(lesson.group_id) === String(selectedFinanceGroup.id))
+                .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time))
+            : [];
+    }, [selectedFinanceGroup, lessons]);
+
+    const selectedAttendanceByLessonId = React.useMemo(() => {
+        return new Map(
+            attendance
+                .filter(item => String(item.student_id) === studentIdStr)
+                .map(item => [String(item.lesson_id), item])
+        );
+    }, [attendance, studentIdStr]);
+
+    const lessonAuditEntryByLessonId = React.useMemo(() => {
+        return new Map(
+            (selectedFinanceAudit?.auditEntries || []).map(entry => [entry.lessonId, entry])
+        );
+    }, [selectedFinanceAudit]);
 
     const getReasonLabel = (reason: AuditReason): string => {
         switch (reason) {
@@ -393,22 +496,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     };
 
     const getSubscriptionCardDates = (sub: Subscription) => {
-        if (!sub.is_consecutive) {
-            return {
-                startDate: sub.purchase_date,
-                endDate: sub.expiry_date
-            };
-        }
-
-        const { expirationDate, missingLessons } = getConsecutiveSubscriptionExpiration(sub, lessons, attendance);
-
-        return {
+        return subscriptionCardDates.get(sub.id!) || {
             startDate: sub.purchase_date,
-            endDate: expirationDate,
-            endDateText: !expirationDate && missingLessons > 0
-                ? t('lessons_not_assigned', { count: missingLessons })
-                : undefined,
-            endDatePending: !expirationDate
+            endDate: sub.expiry_date,
+            endDatePending: false
         };
     };
     const passCoversLessonDate = (sub: Subscription, lessonDate: string) => {
@@ -446,46 +537,48 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         return rangeLabel ? `${lessonsLabel}, ${rangeLabel}` : lessonsLabel;
     };
 
-    const lessonAuditEntries = selectedGroupLessons.map<BalanceAuditEntry>(lesson => {
-        const existingEntry = lessonAuditEntryByLessonId.get(String(lesson.id));
-        if (existingEntry) return existingEntry;
+    const lessonAuditEntries = React.useMemo(() => {
+        return selectedGroupLessons.map<BalanceAuditEntry>(lesson => {
+            const existingEntry = lessonAuditEntryByLessonId.get(String(lesson.id));
+            if (existingEntry) return existingEntry;
 
-        const attendanceRecord = selectedAttendanceByLessonId.get(String(lesson.id));
-        const matchingPass = findCoveringPassForLessonDate(lesson.date);
-        const hasMatchingPass = !!matchingPass;
+            const attendanceRecord = selectedAttendanceByLessonId.get(String(lesson.id));
+            const matchingPass = findCoveringPassForLessonDate(lesson.date);
+            const hasMatchingPass = !!matchingPass;
 
-        if (lesson.status === 'cancelled') {
+            if (lesson.status === 'cancelled') {
+                return {
+                    lessonId: String(lesson.id),
+                    lessonDate: lesson.date,
+                    lessonTime: lesson.time,
+                    attendanceStatus: attendanceRecord?.status ?? null,
+                    status: 'not_counted',
+                    reason: 'not_counted_cancelled'
+                };
+            }
+
+            if (attendanceRecord?.status === 'absence_valid' || attendanceRecord?.status === 'old_absence_valid') {
+                return {
+                    lessonId: String(lesson.id),
+                    lessonDate: lesson.date,
+                    lessonTime: lesson.time,
+                    attendanceStatus: attendanceRecord.status,
+                    status: 'not_counted',
+                    reason: 'not_counted_valid_skip'
+                };
+            }
+
             return {
                 lessonId: String(lesson.id),
                 lessonDate: lesson.date,
                 lessonTime: lesson.time,
                 attendanceStatus: attendanceRecord?.status ?? null,
                 status: 'not_counted',
-                reason: 'not_counted_cancelled'
+                reason: hasMatchingPass ? 'not_counted_no_attendance' : 'uncovered_no_matching_pass',
+                coveredByPassId: matchingPass?.id
             };
-        }
-
-        if (attendanceRecord?.status === 'absence_valid' || attendanceRecord?.status === 'old_absence_valid') {
-            return {
-                lessonId: String(lesson.id),
-                lessonDate: lesson.date,
-                lessonTime: lesson.time,
-                attendanceStatus: attendanceRecord.status,
-                status: 'not_counted',
-                reason: 'not_counted_valid_skip'
-            };
-        }
-
-        return {
-            lessonId: String(lesson.id),
-            lessonDate: lesson.date,
-            lessonTime: lesson.time,
-            attendanceStatus: attendanceRecord?.status ?? null,
-            status: 'not_counted',
-            reason: hasMatchingPass ? 'not_counted_no_attendance' : 'uncovered_no_matching_pass',
-            coveredByPassId: matchingPass?.id
-        };
-    });
+        });
+    }, [selectedGroupLessons, lessonAuditEntryByLessonId, selectedAttendanceByLessonId, selectedActiveSubs, today]);
     const totalPassCredit = selectedFinanceAudit
         ? selectedFinanceAudit.passUsage.reduce((sum, passUsage) => sum + passUsage.lessonsTotal, 0)
         : 0;
@@ -568,8 +661,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             setLessonAttendanceSaving(prev => ({ ...prev, [entry.lessonId]: true }));
             if (newStatus !== initialStatus) {
                 changedLessonIdsRef.current.add(entry.lessonId);
+                isDirtyRef.current = true;
             } else {
                 changedLessonIdsRef.current.delete(entry.lessonId);
+                isDirtyRef.current = true;
             }
 
             try {
@@ -730,12 +825,33 @@ export const StudentCard: React.FC<StudentCardProps> = ({
     return (
         <>
             <div className={`fixed inset-0 z-[90] flex items-end sm:items-center justify-center transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleCancel} />
+                <div
+                    className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                    onClick={() => {
+                        if (!isDirtyRef.current) {
+                            handleCancel();
+                            return;
+                        }
+
+                        const hasChanges = editName.trim() !== (student?.name || '') ||
+                            editTelegram.replace(/@/g, '').trim() !== (student?.telegram_username || '') ||
+                            editInstagram.replace(/@/g, '').trim() !== (student?.instagram_username || '') ||
+                            editNotes.trim() !== (student?.notes || '') ||
+                            (changedLessonIdsRef.current && changedLessonIdsRef.current.size > 0);
+
+                        if (hasChanges) {
+                            setIsShaking(true);
+                            setTimeout(() => setIsShaking(false), 500);
+                        } else {
+                            handleCancel();
+                        }
+                    }}
+                />
 
                 <div className={`relative w-full max-lg max-w-lg max-h-[90vh] bg-ios-card dark:bg-zinc-900 rounded-t-3xl sm:rounded-3xl shadow-2xl transition-transform duration-300 transform flex flex-col overflow-hidden overscroll-y-contain ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
                     {/* Header */}
                     <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-zinc-800">
-                        <button onClick={handleCancel} className="p-1">
+                        <button onClick={handleCancel} className={cn("p-1", isShaking && "animate-shake")}>
                             <X className="w-6 h-6 text-ios-gray" />
                         </button>
                         <h2 className="font-bold text-lg dark:text-white truncate max-w-[200px]">
@@ -745,7 +861,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             <button
                                 onClick={handleSave}
                                 disabled={!editName.trim()}
-                                className="text-ios-blue font-semibold disabled:opacity-50"
+                                className={cn("text-ios-blue font-semibold disabled:opacity-50", isShaking && "animate-shake")}
                             >
                                 {t('save')}
                             </button>
@@ -762,7 +878,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     type="text"
                                     value={editName}
                                     autoFocus={!student.name}
-                                    onChange={(e) => setEditName(e.target.value)}
+                                    onChange={(e) => { setEditName(e.target.value); isDirtyRef.current = true; }}
                                     readOnly={readOnly}
                                     className="w-full mt-1 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                     placeholder={t('student_name')}
@@ -776,7 +892,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                         <input
                                             type="text"
                                             value={editTelegram}
-                                            onChange={(e) => setEditTelegram(e.target.value)}
+                                            onChange={(e) => { setEditTelegram(e.target.value); isDirtyRef.current = true; }}
                                             readOnly={readOnly}
                                             className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                             placeholder="username"
@@ -814,7 +930,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                     <input
                                         type="text"
                                         value={editInstagram}
-                                        onChange={(e) => setEditInstagram(e.target.value)}
+                                        onChange={(e) => { setEditInstagram(e.target.value); isDirtyRef.current = true; }}
                                         readOnly={readOnly}
                                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm disabled:opacity-50"
                                         placeholder="username"
@@ -840,7 +956,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <label className="text-[10px] font-black text-ios-gray uppercase tracking-widest px-1 mb-1 block">{t('note')}</label>
                                 <textarea
                                     value={editNotes}
-                                    onChange={(e) => setEditNotes(e.target.value)}
+                                    onChange={(e) => { setEditNotes(e.target.value); isDirtyRef.current = true; }}
                                     readOnly={readOnly}
                                     className="w-full px-3 py-2 text-sm dark:text-white bg-ios-background dark:bg-zinc-800 border border-transparent dark:border-zinc-800 rounded-xl resize-none disabled:opacity-50"
                                     placeholder={t('note') || 'Note'}
@@ -855,13 +971,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                 <section>
                                     <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
                                         {financeTabGroups.map(group => {
-                                            const balance = calculateStudentGroupBalance(
-                                                student.id!,
-                                                String(group.id),
-                                                allSubscriptions,
-                                                attendance,
-                                                lessons
-                                            ).balance;
+                                            const balance = balanceByGroupId.get(String(group.id)) ?? 0;
                                             const isSelected = String(group.id) === String(selectedFinanceGroupId);
 
                                             return (
