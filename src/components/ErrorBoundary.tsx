@@ -6,7 +6,7 @@ const SECURITY_REAUTH_NOTICE_KEY = 'suica_security_reauth_notice';
 
 function isAuthError(error: Error) {
     const message = error.toString();
-    return message.includes('Unauthenticated') || message.includes('authToken');
+    return message.includes('Unauthenticated');
 }
 
 interface Props {
