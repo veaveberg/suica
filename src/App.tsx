@@ -8,7 +8,7 @@ import { TeacherApp } from './components/TeacherApp'
 
 function App() {
   const { i18n } = useTranslation()
-  const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady } = useTelegram()
+  const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady, authError } = useTelegram()
   const securityNotice = !convexUser && sessionStorage.getItem('suica_security_reauth_notice')
     ? 'security_reauth_notice'
     : null
@@ -76,6 +76,7 @@ function App() {
       <LoginPage
         onTelegramAuth={onAuth}
         securityNoticeKey={securityNotice}
+        authError={authError}
         isDark={isDark}
         themeMode={themeMode}
         onChangeThemeMode={changeThemeMode}

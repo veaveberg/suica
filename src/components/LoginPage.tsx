@@ -8,6 +8,7 @@ import { Settings, X } from 'lucide-react';
 interface LoginPageProps {
     onTelegramAuth: (user: any) => void;
     securityNoticeKey?: string | null;
+    authError?: string;
     // Settings props
     isDark: boolean;
     themeMode: 'auto' | 'light' | 'dark';
@@ -18,6 +19,7 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = ({
     onTelegramAuth,
     securityNoticeKey,
+    authError,
     isDark,
     themeMode,
     onChangeThemeMode,
@@ -60,6 +62,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         <div className="rounded-2xl bg-white/15 border border-white/30 p-3 text-left">
                             <p className="text-xs text-white/95 leading-relaxed">
                                 {t(securityNoticeKey)}
+                            </p>
+                        </div>
+                    )}
+                    {authError && (
+                        <div className="rounded-2xl bg-ios-red/20 border border-ios-red/40 p-3 text-left">
+                            <p className="text-xs text-white leading-relaxed">
+                                {authError}
                             </p>
                         </div>
                     )}
