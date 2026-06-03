@@ -18,6 +18,7 @@ export interface StudentBalance {
 
 export type AuditReason =
     | 'counted_present'           // Attended, counted against pass
+    | 'counted_absence_valid'     // Valid skip, counted against a consecutive pass
     | 'counted_absence_invalid'   // Invalid skip, counted against pass
     | 'counted_no_attendance_consecutive' // No attendance mark; auto-counted by consecutive pass rule
     | 'not_counted_valid_skip'    // Valid skip, not counted
@@ -138,7 +139,7 @@ export function calculateStudentGroupBalanceWithAudit(
                 });
                 continue;
             }
-            if (attendanceRecord.status === 'absence_valid') {
+            if (attendanceRecord.status === 'absence_valid' || attendanceRecord.status === 'old_absence_valid') {
                 auditEntries.push({
                     lessonId: String(lesson.id),
                     lessonDate: lesson.date,
@@ -151,7 +152,11 @@ export function calculateStudentGroupBalanceWithAudit(
             }
 
             // Spending status with no pass = debt
-            if (attendanceRecord.status === 'present' || attendanceRecord.status === 'absence_invalid') {
+            if (
+                attendanceRecord.status === 'present' ||
+                attendanceRecord.status === 'absence_invalid' ||
+                attendanceRecord.status === 'old_absence_invalid'
+            ) {
                 lessonsOwed++;
                 uncoveredLessons.push({
                     lessonId: String(lesson.id),
@@ -233,8 +238,8 @@ export function calculateStudentGroupBalanceWithAudit(
             continue;
         }
 
-        // Handle valid skips
-        if (attendanceRecord?.status === 'absence_valid') {
+        // Legacy valid absences keep the previous accounting behavior.
+        if (attendanceRecord?.status === 'old_absence_valid') {
             auditEntries.push({
                 lessonId: String(lesson.id),
                 lessonDate: lesson.date,
@@ -247,8 +252,10 @@ export function calculateStudentGroupBalanceWithAudit(
         }
 
         const isPresent = autoConsumeConsecutive || attendanceRecord?.status === 'present';
-        const isInvalidSkip = attendanceRecord?.status === 'absence_invalid';
-        const isSpendingLesson = isPresent || isInvalidSkip;
+        const isCurrentValidSkip = attendanceRecord?.status === 'absence_valid';
+        const isCurrentInvalidSkip = attendanceRecord?.status === 'absence_invalid';
+        const isLegacyInvalidSkip = attendanceRecord?.status === 'old_absence_invalid';
+        const isSpendingLesson = isPresent || isCurrentValidSkip || isCurrentInvalidSkip || isLegacyInvalidSkip;
         const auditAttendanceStatus: AttendanceStatus | null = attendanceRecord?.status ?? null;
 
         // Spending status - try to find a pass
@@ -269,8 +276,8 @@ export function calculateStudentGroupBalanceWithAudit(
                         continue;
                     }
 
-                    // IF it's an invalid skip, it ONLY consumes credits if the pass is consecutive
-                    if (isInvalidSkip && !pass.is_consecutive) {
+                    // New valid absences and legacy invalid absences only consume consecutive passes.
+                    if ((isCurrentValidSkip || isLegacyInvalidSkip) && !pass.is_consecutive) {
                         continue;
                     }
 
@@ -289,7 +296,7 @@ export function calculateStudentGroupBalanceWithAudit(
                             status: 'counted',
                             reason: autoConsumeConsecutive
                                 ? 'counted_no_attendance_consecutive'
-                                : (isPresent ? 'counted_present' : 'counted_absence_invalid'),
+                                : (isPresent ? 'counted_present' : (isCurrentValidSkip ? 'counted_absence_valid' : 'counted_absence_invalid')),
                             coveredByPassId: pass.id!
                         });
                         break;
@@ -303,7 +310,7 @@ export function calculateStudentGroupBalanceWithAudit(
             //    - It fell within a consecutive pass window (pass exists but depleted), OR
             //    - No pass exists at all (student skipped without any pass)
             if (!covered) {
-                const shouldCountAsDebt = isPresent || dateMatchesConsecutivePass;
+                const shouldCountAsDebt = isPresent || isCurrentInvalidSkip || dateMatchesConsecutivePass;
 
                 if (shouldCountAsDebt) {
                     auditEntries.push({

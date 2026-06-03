@@ -7,7 +7,8 @@ export interface ConsecutiveSubscriptionExpiration {
 
 /**
  * Calculates the last included lesson date for a consecutive subscription.
- * Cancelled lessons and valid absences do not consume a slot.
+ * Cancelled lessons and legacy valid absences do not consume a slot.
+ * Current absences do not auto-extend passes; teachers extend manually.
  */
 export function getConsecutiveSubscriptionExpiration(
     subscription: Subscription,
@@ -35,7 +36,7 @@ export function getConsecutiveSubscriptionExpiration(
             ? attendanceByLessonId.get(String(lesson.id))
             : undefined;
 
-        if (lessonAttendance?.status === 'absence_valid') {
+        if (lessonAttendance?.status === 'old_absence_valid') {
             continue;
         }
 

@@ -1,7 +1,8 @@
 import { convex } from './convex-client';
 import { api } from '../convex/_generated/api';
-import { getAuthToken, getAuthUserId } from './auth-store';
+import { getAuthToken, getAuthUserId, isAuthTokenExpired } from './auth-store';
 import type { Id } from '../convex/_generated/dataModel';
+import type { CurrentAttendanceStatus } from './types';
 
 // Map table names to Convex API modules
 const convexApi: any = {
@@ -23,7 +24,7 @@ type TableName = keyof typeof convexApi;
 function requireAuth() {
     const userId = getAuthUserId();
     const authToken = getAuthToken();
-    if (!userId || !authToken) throw new Error("Unauthenticated");
+    if (!userId || !authToken || isAuthTokenExpired(authToken)) throw new Error("Unauthenticated");
     return { userId: userId as Id<"users">, authToken };
 }
 
@@ -121,7 +122,7 @@ export async function syncAttendance(lessonId: string, attendance: any[]): Promi
 export async function markAttendance(args: {
     lesson_id: string,
     student_id: string,
-    status: "present" | "absence_valid" | "absence_invalid",
+    status: CurrentAttendanceStatus,
     payment_amount?: number,
 }): Promise<void> {
     const { userId, authToken } = requireAuth();

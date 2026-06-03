@@ -2,18 +2,19 @@ import React from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import { convex } from './convex-client';
-import { getAuthToken, getAuthUserId } from './auth-store';
+import { getAuthToken, getAuthUserId, isAuthTokenExpired } from './auth-store';
 import { useTelegram } from './components/TelegramProvider';
 import type { Group, Student, StudentGroup, Subscription, Lesson, GroupSchedule, Attendance, Tariff, Pass, PassGroup, ExternalCalendar } from './types';
 import { GROUP_COLORS } from './constants/colors';
 import type { Id } from '../convex/_generated/dataModel';
+import type { CurrentAttendanceStatus } from './types';
 
 export { GROUP_COLORS };
 
 function requireAuth() {
     const userId = getAuthUserId();
     const authToken = getAuthToken();
-    if (!userId || !authToken) {
+    if (!userId || !authToken || isAuthTokenExpired(authToken)) {
         throw new Error("Unauthenticated");
     }
     return { userId: userId as Id<"users">, authToken };
@@ -25,9 +26,10 @@ function requireAuth() {
 
 function useDataQuery<T>(query: any, userId?: string, skip: boolean = false) {
     const authToken = getAuthToken();
-    const data = useQuery(query, (userId && authToken && !skip) ? { userId: userId as Id<"users">, authToken } : "skip");
+    const hasValidAuth = !!userId && !!authToken && !isAuthTokenExpired(authToken) && !skip;
+    const data = useQuery(query, hasValidAuth ? { userId: userId as Id<"users">, authToken } : "skip");
     const mappedData = (data || []).map((item: any) => ({ ...item, id: item._id }));
-    const loading = (userId && authToken && !skip) ? data === undefined : false;
+    const loading = hasValidAuth ? data === undefined : false;
 
     // Memoize refresh to prevent unnecessary effect triggers in consumers
     const refresh = React.useCallback(async () => { /* Convex handles updates automatically */ }, []);
@@ -386,7 +388,7 @@ export async function addSubscription(sub: Omit<Subscription, 'id'>): Promise<st
     return id;
 }
 
-export async function markAttendance(lessonId: string, studentId: string, status: 'present' | 'absence_valid' | 'absence_invalid'): Promise<void> {
+export async function markAttendance(lessonId: string, studentId: string, status: CurrentAttendanceStatus): Promise<void> {
     const { userId, authToken } = requireAuth();
     await convex.mutation(api.attendance.mark, {
         userId,

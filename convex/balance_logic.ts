@@ -18,6 +18,7 @@ export interface StudentBalance {
 
 export type AuditReason =
     | 'counted_present'
+    | 'counted_absence_valid'
     | 'counted_absence_invalid'
     | 'counted_no_attendance_consecutive'
     | 'not_counted_valid_skip'
@@ -30,7 +31,7 @@ export interface BalanceAuditEntry {
     lessonId: string;
     lessonDate: string;
     lessonTime: string;
-    attendanceStatus: "present" | "absence_valid" | "absence_invalid" | null;
+    attendanceStatus: "present" | "absence_valid" | "absence_invalid" | "old_absence_valid" | "old_absence_invalid" | null;
     status: 'counted' | 'not_counted';
     reason: AuditReason;
     coveredByPassId?: string;
@@ -115,7 +116,7 @@ export function calculateStudentGroupBalanceWithAudit(
                 });
                 continue;
             }
-            if (attendanceRecord.status === 'absence_valid') {
+            if (attendanceRecord.status === 'absence_valid' || attendanceRecord.status === 'old_absence_valid') {
                 auditEntries.push({
                     lessonId: lesson._id,
                     lessonDate: lesson.date,
@@ -128,7 +129,11 @@ export function calculateStudentGroupBalanceWithAudit(
             }
 
             // Spending status with no pass = debt
-            if (attendanceRecord.status === 'present' || attendanceRecord.status === 'absence_invalid') {
+            if (
+                attendanceRecord.status === 'present' ||
+                attendanceRecord.status === 'absence_invalid' ||
+                attendanceRecord.status === 'old_absence_invalid'
+            ) {
                 lessonsOwed++;
                 uncoveredLessons.push({
                     lessonId: lesson._id,
@@ -210,8 +215,8 @@ export function calculateStudentGroupBalanceWithAudit(
             continue;
         }
 
-        // Handle valid skips
-        if (attendanceRecord?.status === 'absence_valid') {
+        // Legacy valid absences keep the previous accounting behavior.
+        if (attendanceRecord?.status === 'old_absence_valid') {
             auditEntries.push({
                 lessonId: lesson._id,
                 lessonDate: lesson.date,
@@ -224,8 +229,10 @@ export function calculateStudentGroupBalanceWithAudit(
         }
 
         const isPresent = autoConsumeConsecutive || attendanceRecord?.status === 'present';
-        const isInvalidSkip = attendanceRecord?.status === 'absence_invalid';
-        const isSpendingLesson = isPresent || isInvalidSkip;
+        const isCurrentValidSkip = attendanceRecord?.status === 'absence_valid';
+        const isCurrentInvalidSkip = attendanceRecord?.status === 'absence_invalid';
+        const isLegacyInvalidSkip = attendanceRecord?.status === 'old_absence_invalid';
+        const isSpendingLesson = isPresent || isCurrentValidSkip || isCurrentInvalidSkip || isLegacyInvalidSkip;
         const auditAttendanceStatus = attendanceRecord?.status ?? null;
 
         // Spending status - try to find a pass
@@ -246,8 +253,8 @@ export function calculateStudentGroupBalanceWithAudit(
                         continue;
                     }
 
-                    // IF it's an invalid skip, it ONLY consumes credits if the pass is consecutive
-                    if (isInvalidSkip && !pass.is_consecutive) {
+                    // New valid absences and legacy invalid absences only consume consecutive passes.
+                    if ((isCurrentValidSkip || isLegacyInvalidSkip) && !pass.is_consecutive) {
                         continue;
                     }
 
@@ -266,7 +273,7 @@ export function calculateStudentGroupBalanceWithAudit(
                             status: 'counted',
                             reason: autoConsumeConsecutive
                                 ? 'counted_no_attendance_consecutive'
-                                : (isPresent ? 'counted_present' : 'counted_absence_invalid'),
+                                : (isPresent ? 'counted_present' : (isCurrentValidSkip ? 'counted_absence_valid' : 'counted_absence_invalid')),
                             coveredByPassId: pass._id
                         });
                         break;
@@ -276,7 +283,7 @@ export function calculateStudentGroupBalanceWithAudit(
 
             // Allocation logic for uncovered lessons
             if (!covered) {
-                const shouldCountAsDebt = isPresent || dateMatchesConsecutivePass;
+                const shouldCountAsDebt = isPresent || isCurrentInvalidSkip || dateMatchesConsecutivePass;
 
                 if (shouldCountAsDebt) {
                     auditEntries.push({

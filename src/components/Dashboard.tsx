@@ -442,8 +442,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ lessons: fallbackLessons, 
                                             if (userAttendance) {
                                                 const status = userAttendance.status;
                                                 const statusColor = status === 'present' ? 'text-ios-green' :
-                                                    status === 'absence_invalid' ? 'text-ios-red' :
-                                                        status === 'absence_valid' ? 'text-ios-blue' : 'text-ios-gray';
+                                                    status === 'absence_invalid' || status === 'old_absence_invalid' ? 'text-ios-red' :
+                                                        status === 'absence_valid' || status === 'old_absence_valid' ? 'text-ios-blue' : 'text-ios-gray';
 
                                                 return (
                                                     <span className={cn("flex items-center gap-1 text-sm font-medium", statusColor)}>

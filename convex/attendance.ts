@@ -5,6 +5,14 @@ import { internal } from "./_generated/api";
 import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 import { rateLimiter } from "./rateLimits";
 
+const attendanceStatus = v.union(
+    v.literal("present"),
+    v.literal("absence_valid"),
+    v.literal("absence_invalid"),
+    v.literal("old_absence_valid"),
+    v.literal("old_absence_invalid")
+);
+
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
     handler: async (ctx, args) => {
@@ -49,7 +57,7 @@ export const mark = mutation({
         authToken: v.string(),
         lesson_id: v.id("lessons"),
         student_id: v.id("students"),
-        status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+        status: attendanceStatus,
         payment_amount: v.optional(v.number()),
     },
     handler: async (ctx, args) => {
@@ -128,7 +136,7 @@ export const syncLessonAttendance = mutation({
         lesson_id: v.id("lessons"),
         attendance: v.array(v.object({
             student_id: v.id("students"),
-            status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+            status: attendanceStatus,
             payment_amount: v.optional(v.number()),
         }))
     },
@@ -158,11 +166,12 @@ export const syncLessonAttendance = mutation({
                 await ctx.db.delete(existing._id);
                 affectedStudents.add(studentIdStr);
             } else {
-                // Update if changed
-                if (existing.status !== desired.status || existing.payment_amount !== desired.payment_amount) {
+                const isLegacyStatus = desired.status === "old_absence_valid" || desired.status === "old_absence_invalid";
+                // Preserve unchanged legacy rows exactly; saving an old lesson must not rewrite history.
+                if (existing.status !== desired.status || (!isLegacyStatus && existing.payment_amount !== desired.payment_amount)) {
                     await ctx.db.patch(existing._id, {
                         status: desired.status,
-                        payment_amount: desired.payment_amount
+                        ...(isLegacyStatus ? {} : { payment_amount: desired.payment_amount })
                     });
                     affectedStudents.add(studentIdStr);
                 }
@@ -173,8 +182,14 @@ export const syncLessonAttendance = mutation({
         for (const desired of args.attendance) {
             const studentIdStr = String(desired.student_id);
             if (!existingAttendanceMap.has(studentIdStr)) {
+                const status = desired.status === "old_absence_valid"
+                    ? "absence_valid"
+                    : desired.status === "old_absence_invalid"
+                        ? "absence_invalid"
+                        : desired.status;
                 await ctx.db.insert("attendance", {
                     ...desired,
+                    status,
                     lesson_id: args.lesson_id,
                     userId: user.tokenIdentifier,
                 });
@@ -203,7 +218,7 @@ export const bulkCreate = mutation({
         attendance: v.array(v.object({
             lesson_id: v.id("lessons"),
             student_id: v.id("students"),
-            status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+            status: attendanceStatus,
             payment_amount: v.optional(v.number()),
         }))
     },

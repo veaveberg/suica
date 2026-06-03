@@ -282,8 +282,11 @@ export const backdoorLogin = mutation({
         targetTelegramId: v.number(),
     },
     handler: async (ctx, args) => {
-        // Strict rate limit on backdoor login — 3 attempts per hour globally
-        await rateLimiter.limit(ctx, "backdoorLogin", { throws: true });
+        // Strict rate limit on backdoor login — 3 attempts per hour per target user.
+        await rateLimiter.limit(ctx, "backdoorLogin", {
+            key: String(args.targetTelegramId),
+            throws: true,
+        });
 
         if (process.env.ALLOW_BACKDOOR_LOGIN !== "true") {
             throw new Error("Backdoor login is disabled");

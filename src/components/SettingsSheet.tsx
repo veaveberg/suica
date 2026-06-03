@@ -14,7 +14,7 @@ import {
 import type { Language, ExternalCalendar } from '../types';
 import { cn } from '../utils/cn';
 import { useTelegram } from './TelegramProvider';
-import { getAuthToken } from '../auth-store';
+import { getAuthToken, isAuthTokenExpired } from '../auth-store';
 
 interface SettingsSheetProps {
     isOpen: boolean;
@@ -37,17 +37,18 @@ const CALENDAR_COLORS = [
 
 const CalendarExportSection = ({ t, userId }: { t: any, userId?: string }) => {
     const authToken = getAuthToken();
+    const hasValidAuth = !!authToken && !isAuthTokenExpired(authToken);
     const ensureExportToken = useMutation((api.calendars as any).ensureExportTokenForUser);
-    const exportUrl = useQuery(api.calendars.getExportUrl, userId && authToken ? { userId: userId as any, authToken } : "skip");
-    const groupExports = useQuery(api.calendars.getGroupExportUrls, userId && authToken ? { userId: userId as any, authToken } : "skip");
+    const exportUrl = useQuery(api.calendars.getExportUrl, userId && hasValidAuth ? { userId: userId as any, authToken: authToken! } : "skip");
+    const groupExports = useQuery(api.calendars.getGroupExportUrls, userId && hasValidAuth ? { userId: userId as any, authToken: authToken! } : "skip");
 
     const [mainCopied, setMainCopied] = useState(false);
     const [copiedGroup, setCopiedGroup] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!userId || !authToken) return;
-        ensureExportToken({ userId: userId as any, authToken }).catch(() => { });
-    }, [userId, authToken, ensureExportToken]);
+        if (!userId || !hasValidAuth) return;
+        ensureExportToken({ userId: userId as any, authToken: authToken! }).catch(() => { });
+    }, [userId, authToken, hasValidAuth, ensureExportToken]);
 
 
     const handleCopy = (url: string, setFn: (v: boolean) => void) => {
@@ -146,15 +147,51 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     const [calendarColor, setCalendarColor] = useState(CALENDAR_COLORS[0]);
 
     const { firstName, logout, convexUser, backdoorLogin } = useTelegram();
+    const authToken = getAuthToken();
+    const hasValidAuth = !!authToken && !isAuthTokenExpired(authToken);
     const me = useQuery(
         api.users.getMe,
-        convexUser?._id && getAuthToken() ? { userId: convexUser._id as any, authToken: getAuthToken()! } : "skip"
+        convexUser?._id && hasValidAuth ? { userId: convexUser._id as any, authToken: authToken! } : "skip"
     );
 
     const [customUserId, setCustomUserId] = useState('');
     const [backdoorSecret, setBackdoorSecret] = useState('');
+    const [backdoorError, setBackdoorError] = useState('');
+    const [isBackdoorLoggingIn, setIsBackdoorLoggingIn] = useState(false);
 
     if (!isOpen) return null;
+
+    const getBackdoorErrorMessage = (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const retryMatch = message.match(/"retryAfter":(\d+)/);
+        if (retryMatch) {
+            const retrySeconds = Number(retryMatch[1]);
+            const retryMinutes = Math.max(1, Math.ceil(retrySeconds / 60));
+            return `Developer login is rate limited. Try again in ${retryMinutes} minute${retryMinutes === 1 ? '' : 's'}.`;
+        }
+        if (message.includes('Invalid backdoor credentials')) return 'Invalid backdoor credentials.';
+        if (message.includes('Target user not found')) return 'Target user not found.';
+        if (message.includes('disabled')) return 'Developer login is disabled.';
+        return 'Developer login failed.';
+    };
+
+    const handleBackdoorLogin = async () => {
+        const id = parseInt(customUserId) || 129516266;
+        if (!backdoorSecret.trim() || isBackdoorLoggingIn) return;
+
+        setIsBackdoorLoggingIn(true);
+        setBackdoorError('');
+        try {
+            await backdoorLogin(id, backdoorSecret.trim());
+            setBackdoorSecret('');
+            onClose();
+        } catch (error) {
+            console.error('Developer login failed:', error);
+            setBackdoorError(getBackdoorErrorMessage(error));
+        } finally {
+            setIsBackdoorLoggingIn(false);
+        }
+    };
 
     const handleClearData = async () => {
         if (!confirmClear) {
@@ -402,22 +439,23 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                             type="password"
                             placeholder="Backdoor secret"
                             value={backdoorSecret}
-                            onChange={(e) => setBackdoorSecret(e.target.value)}
+                            onChange={(e) => {
+                                setBackdoorSecret(e.target.value);
+                                setBackdoorError('');
+                            }}
                             className="flex-1 px-4 py-3 bg-ios-background dark:bg-zinc-800 rounded-xl text-sm dark:text-white"
                         />
                         <button
-                            onClick={async () => {
-                                const id = parseInt(customUserId) || 129516266;
-                                if (!backdoorSecret.trim()) return;
-                                await backdoorLogin(id, backdoorSecret.trim());
-                                setBackdoorSecret('');
-                                onClose();
-                            }}
-                            className="px-4 py-3 bg-ios-blue text-white font-medium rounded-xl text-sm"
+                            onClick={handleBackdoorLogin}
+                            disabled={!backdoorSecret.trim() || isBackdoorLoggingIn}
+                            className="px-4 py-3 bg-ios-blue text-white font-medium rounded-xl text-sm disabled:opacity-50 disabled:pointer-events-none"
                         >
-                            Login
+                            {isBackdoorLoggingIn ? '...' : 'Login'}
                         </button>
                     </div>
+                    {backdoorError && (
+                        <p className="text-xs text-ios-red text-center">{backdoorError}</p>
+                    )}
                 </div>
             )}
         </div>

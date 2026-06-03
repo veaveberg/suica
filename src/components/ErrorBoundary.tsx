@@ -1,5 +1,13 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { clearAuthUser } from '../auth-store';
+
+const SECURITY_REAUTH_NOTICE_KEY = 'suica_security_reauth_notice';
+
+function isAuthError(error: Error) {
+    const message = error.toString();
+    return message.includes('Unauthenticated') || message.includes('authToken');
+}
 
 interface Props {
     children?: ReactNode;
@@ -21,6 +29,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
     public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
+
+        if (isAuthError(error)) {
+            sessionStorage.setItem(SECURITY_REAUTH_NOTICE_KEY, '1');
+            clearAuthUser();
+            window.location.reload();
+        }
     }
 
     public render() {

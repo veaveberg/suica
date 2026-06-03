@@ -90,7 +90,13 @@ export default defineSchema({
     attendance: defineTable({
         lesson_id: v.id("lessons"),
         student_id: v.id("students"),
-        status: v.union(v.literal("present"), v.literal("absence_valid"), v.literal("absence_invalid")),
+        status: v.union(
+            v.literal("present"),
+            v.literal("absence_valid"),
+            v.literal("absence_invalid"),
+            v.literal("old_absence_valid"),
+            v.literal("old_absence_invalid")
+        ),
         payment_amount: v.optional(v.number()),
         is_uncovered: v.optional(v.boolean()),
         userId: v.string(),

@@ -5,6 +5,26 @@ export let currentUserRole: 'admin' | 'teacher' | 'student' | null = localStorag
 export let currentStudentId: string | null = localStorage.getItem(AUTH_KEY + '_student_id');
 export let currentAuthToken: string | null = localStorage.getItem(AUTH_KEY + '_token');
 
+export function getAuthTokenExpiresAt(token: string | null = currentAuthToken): number | null {
+    if (!token) return null;
+
+    const parts = token.split('.');
+    if (parts.length < 3 || parts[0] !== 'v1') return null;
+
+    const payload = parts.slice(1, -1).join('.');
+    const expRaw = new URLSearchParams(payload).get('exp');
+    if (!expRaw) return null;
+
+    const exp = Number(expRaw);
+    return Number.isFinite(exp) ? exp : null;
+}
+
+export function isAuthTokenExpired(token: string | null = currentAuthToken): boolean {
+    const expiresAt = getAuthTokenExpiresAt(token);
+    if (!expiresAt) return false;
+    return expiresAt <= Math.floor(Date.now() / 1000);
+}
+
 export function setAuthUser(userId: string, role: any, studentId?: string, authToken?: string) {
     currentUserId = userId;
     currentUserRole = role;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Plus, Instagram, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, Calendar, XCircle, CheckCircle2, Check } from 'lucide-react';
-import type { Subscription, Student, Lesson, AttendanceStatus } from '../types';
+import type { Subscription, Student, Lesson, AttendanceStatus, CurrentAttendanceStatus } from '../types';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
 import { LessonDetailSheet } from './LessonDetailSheet';
 import { PassCard } from './PassCard';
@@ -23,6 +23,21 @@ function getTodayLocalDate(): string {
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 }
+
+const isValidAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    status === 'absence_valid' || status === 'old_absence_valid';
+
+const isInvalidAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    status === 'absence_invalid' || status === 'old_absence_invalid';
+
+const isAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    isValidAbsenceStatus(status) || isInvalidAbsenceStatus(status);
+
+const toCurrentAttendanceStatus = (status: AttendanceStatus): CurrentAttendanceStatus => {
+    if (status === 'old_absence_valid') return 'absence_valid';
+    if (status === 'old_absence_invalid') return 'absence_invalid';
+    return status;
+};
 
 interface StudentCardProps {
     isOpen: boolean;
@@ -172,7 +187,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                 await api.markAttendance({
                     lesson_id: lessonId,
                     student_id: student.id,
-                    status: initial.status,
+                    status: toCurrentAttendanceStatus(initial.status),
                     payment_amount: initial.payment_amount
                 });
             }
@@ -356,6 +371,8 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         switch (reason) {
             case 'counted_present':
                 return t('attendance_present') || 'Present';
+            case 'counted_absence_valid':
+                return t('attendance_absence_valid') || 'Valid skip';
             case 'counted_absence_invalid':
                 return t('attendance_absence_invalid') || 'Invalid skip';
             case 'counted_no_attendance_consecutive':
@@ -448,7 +465,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             };
         }
 
-        if (attendanceRecord?.status === 'absence_valid') {
+        if (attendanceRecord?.status === 'absence_valid' || attendanceRecord?.status === 'old_absence_valid') {
             return {
                 lessonId: String(lesson.id),
                 lessonDate: lesson.date,
@@ -482,7 +499,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         : 0;
     const skippedLessonsCount = selectedFinanceAudit
         ? selectedFinanceAudit.auditEntries.filter(entry =>
-            entry.status === 'counted' && entry.attendanceStatus === 'absence_invalid'
+            entry.status === 'counted' && isAbsenceStatus(entry.attendanceStatus ?? 'not_marked')
         ).length
         : 0;
     const unmarkedDebtLessonsCount = selectedFinanceAudit
@@ -541,7 +558,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         const skipTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
         const isLongPressRef = React.useRef(false);
 
-        const syncEntryAttendance = async (newStatus: AttendanceStatus | 'not_marked') => {
+        const syncEntryAttendance = async (newStatus: CurrentAttendanceStatus | 'not_marked') => {
             if (!student?.id || !lesson?.id) return;
             if (lessonAttendanceSaving[entry.lessonId]) return;
 
@@ -585,7 +602,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
             isLongPressRef.current = false;
             skipTimerRef.current = setTimeout(() => {
                 isLongPressRef.current = true;
-                const nextSkipStatus = status === 'absence_valid' ? 'absence_invalid' : 'absence_valid';
+                const nextSkipStatus = isValidAbsenceStatus(status) ? 'absence_invalid' : 'absence_valid';
                 void syncEntryAttendance(nextSkipStatus);
                 if (navigator.vibrate) navigator.vibrate(50);
             }, 500);
@@ -602,7 +619,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         const handleSkipClick = (e: React.MouseEvent<HTMLButtonElement>) => {
             e.stopPropagation();
             if (isLongPressRef.current) return;
-            void syncEntryAttendance(status === 'absence_invalid' || status === 'absence_valid' ? 'not_marked' : 'absence_invalid');
+            void syncEntryAttendance(isAbsenceStatus(status) ? 'not_marked' : 'absence_invalid');
         };
 
         const handlePresentClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -642,7 +659,7 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                         )}>
                             {getReasonLabel(entry.reason)}
                         </div>
-                    ) : entry.reason !== 'counted_present' && entry.reason !== 'counted_absence_invalid' && entry.reason !== 'counted_no_attendance_consecutive' && (
+                    ) : entry.reason !== 'counted_present' && entry.reason !== 'counted_absence_valid' && entry.reason !== 'counted_absence_invalid' && entry.reason !== 'counted_no_attendance_consecutive' && (
                         <div className="text-[10px] text-ios-gray font-medium mt-0.5 opacity-80">
                             {getReasonLabel(entry.reason)}
                         </div>
@@ -657,16 +674,16 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                             onPointerLeave={handleSkipPointerUp}
                             onClick={handleSkipClick}
                             disabled={isSavingAttendance}
-                            className={`p-1.5 rounded-l-xl flex items-center justify-center transition-all select-none ${(status === 'absence_invalid' || status === 'absence_valid')
+                            className={`p-1.5 rounded-l-xl flex items-center justify-center transition-all select-none ${isAbsenceStatus(status)
                                 ? 'bg-white dark:bg-zinc-700 shadow-sm'
                                 : ''
                                 } ${isSavingAttendance ? 'opacity-50 pointer-events-none' : ''}`}
                         >
-                            {status === 'absence_invalid' ? (
+                            {isInvalidAbsenceStatus(status) ? (
                                 <div className="w-6 h-6 rounded-full bg-ios-red flex items-center justify-center">
                                     <X className="w-4 h-4 text-white dark:text-zinc-700" strokeWidth={4} />
                                 </div>
-                            ) : status === 'absence_valid' ? (
+                            ) : isValidAbsenceStatus(status) ? (
                                 <div className="w-6 h-6 rounded-full bg-ios-blue flex items-center justify-center">
                                     <X className="w-4 h-4 text-white dark:text-zinc-700" strokeWidth={4} />
                                 </div>

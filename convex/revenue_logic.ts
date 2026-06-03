@@ -44,6 +44,12 @@ export function calculateRevenuePerLesson(
         }
     }
 
+    const shouldUsePassForAttendance = (p: Doc<"subscriptions">, status: Doc<"attendance">["status"] | undefined): boolean => {
+        if (status === "old_absence_valid") return false;
+        if (!p.is_consecutive && (status === "absence_valid" || status === "old_absence_invalid")) return false;
+        return true;
+    };
+
     // Track state for pass usage during traversal
     const passCapacity = new Map<string, number>();
     for (const p of passes) {
@@ -90,14 +96,14 @@ export function calculateRevenuePerLesson(
 
                 const stats = passUsageStats.get(passId) || { attended: 0, unattended: 0 };
                 const attendanceRecord = attendanceMap.get(lesson._id);
-                const isAttended = attendanceRecord?.status === 'present';
-                const isValidSkip = attendanceRecord?.status === 'absence_valid';
-
-                if (!isValidSkip) {
-                    if (isAttended) stats.attended++;
-                    else stats.unattended++;
-                    passCapacity.set(passId, remaining - 1);
+                if (!shouldUsePassForAttendance(window.pass, attendanceRecord?.status)) {
+                    break;
                 }
+                const isAttended = attendanceRecord?.status === 'present';
+
+                if (isAttended) stats.attended++;
+                else stats.unattended++;
+                passCapacity.set(passId, remaining - 1);
                 passUsageStats.set(passId, stats);
                 break; // One pass per lesson
             }
@@ -114,11 +120,13 @@ export function calculateRevenuePerLesson(
         if (lesson.status === 'cancelled') continue;
 
         let coveredBy = null;
+        const attendanceRecord = attendanceMap.get(lesson._id);
 
         // A. Check Non-Consecutive Windows
         for (const [, window] of passEffectiveWindows.entries()) {
             if (lesson.date >= window.start && lesson.date < window.end) {
                 if (isExpiredRelativeToday(window.pass) && lesson.date >= today) continue;
+                if (!shouldUsePassForAttendance(window.pass, attendanceRecord?.status)) continue;
 
                 const remaining = passCapacity.get(window.pass._id) || 0;
                 if (remaining > 0) {
@@ -148,14 +156,12 @@ export function calculateRevenuePerLesson(
             let cost = 0;
             let equation = "";
 
-            const attendanceRecord = attendanceMap.get(lesson._id);
             const isAttended = attendanceRecord?.status === 'present';
-            const isValidSkip = attendanceRecord?.status === 'absence_valid';
+            const consumesPass = shouldUsePassForAttendance(coveredBy, attendanceRecord?.status);
 
-            if (isValidSkip) {
+            if (!consumesPass) {
                 cost = 0;
-                equation = "0 (Valid Skip)";
-                // Valid skip doesn't consume capacity in our logic
+                equation = "0 (Skip)";
             } else {
                 if (!coveredBy.is_consecutive) {
                     // Non-Consecutive (Hybrid)

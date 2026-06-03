@@ -9,22 +9,15 @@ import { TeacherApp } from './components/TeacherApp'
 function App() {
   const { i18n } = useTranslation()
   const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady } = useTelegram()
-  const [securityNotice] = useState<string | null>(() => {
-    const flag = sessionStorage.getItem('suica_security_reauth_notice')
-    if (flag) {
-      sessionStorage.removeItem('suica_security_reauth_notice')
-      return 'security_reauth_notice'
-    }
-    return null
-  })
+  const securityNotice = !convexUser && sessionStorage.getItem('suica_security_reauth_notice')
+    ? 'security_reauth_notice'
+    : null
 
-  if (!isReady) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ios-background dark:bg-black">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ios-blue shadow-lg"></div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!convexUser && securityNotice) {
+      sessionStorage.removeItem('suica_security_reauth_notice')
+    }
+  }, [convexUser, securityNotice])
 
   // Initialize theme from localStorage or 'auto'
   const [themeMode, setThemeMode] = useState<'auto' | 'light' | 'dark'>(() => {
@@ -68,6 +61,14 @@ function App() {
 
   const changeLanguage = (lang: Language) => {
     i18n.changeLanguage(lang)
+  }
+
+  if (!isReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-ios-background dark:bg-black">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ios-blue shadow-lg"></div>
+      </div>
+    );
   }
 
   if (!convexUser) {

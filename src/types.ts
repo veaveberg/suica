@@ -50,7 +50,9 @@ export interface GroupSchedule {
   is_active: boolean;
 }
 
-export type AttendanceStatus = 'present' | 'absence_valid' | 'absence_invalid';
+export type CurrentAttendanceStatus = 'present' | 'absence_valid' | 'absence_invalid';
+export type LegacyAttendanceStatus = 'old_absence_valid' | 'old_absence_invalid';
+export type AttendanceStatus = CurrentAttendanceStatus | LegacyAttendanceStatus;
 
 export interface Attendance {
   id?: string;

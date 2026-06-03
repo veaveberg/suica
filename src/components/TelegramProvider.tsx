@@ -1,8 +1,8 @@
-import { useEffect, useState, createContext, useContext, useCallback } from 'react';
+import { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { setAuthUser, getAuthRole, clearAuthUser, currentUserId as storedUserId, getAuthToken } from '../auth-store';
+import { setAuthUser, getAuthRole, clearAuthUser, currentUserId as storedUserId, getAuthToken, getAuthTokenExpiresAt, isAuthTokenExpired } from '../auth-store';
 
 interface TelegramContextValue {
     isReady: boolean;
@@ -76,9 +76,11 @@ declare global {
 }
 
 export function TelegramProvider({ children }: TelegramProviderProps) {
+    const SESSION_REAUTH_NOTICE_KEY = 'suica_security_reauth_notice';
     const [isReady, setIsReady] = useState(false);
     const [isTelegram, setIsTelegram] = useState(false);
     const [colorScheme, setColorScheme] = useState<'light' | 'dark'>('light');
+    const sessionExpiryTimerRef = useRef<number | null>(null);
     const [userData, setUserData] = useState<{
         userId?: number;
         username?: string;
@@ -90,6 +92,32 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
     const login = useMutation(api.users.login);
     const backdoorLoginMutation = useMutation((api.users as any).backdoorLogin);
 
+    const clearSessionExpiryTimer = useCallback(() => {
+        if (sessionExpiryTimerRef.current !== null) {
+            window.clearTimeout(sessionExpiryTimerRef.current);
+            sessionExpiryTimerRef.current = null;
+        }
+    }, []);
+
+    const markSessionExpired = useCallback(() => {
+        sessionStorage.setItem(SESSION_REAUTH_NOTICE_KEY, '1');
+        clearSessionExpiryTimer();
+        clearAuthUser();
+        setUserData({});
+    }, [clearSessionExpiryTimer]);
+
+    const scheduleSessionExpiry = useCallback((authToken?: string | null) => {
+        clearSessionExpiryTimer();
+        const expiresAt = getAuthTokenExpiresAt(authToken || null);
+        if (!expiresAt) return;
+
+        const expiresInMs = expiresAt * 1000 - Date.now() - 5000;
+        const delay = Math.max(expiresInMs, 0);
+        sessionExpiryTimerRef.current = window.setTimeout(() => {
+            markSessionExpired();
+        }, delay);
+    }, [clearSessionExpiryTimer, markSessionExpired]);
+
     const onAuth = useCallback(async (tgUser: any) => {
         console.log("[TelegramAuth] Callback received from widget:", tgUser);
         try {
@@ -100,6 +128,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
             console.log("[TelegramAuth] Convex login mutation result:", user);
             if (user) {
                 setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
+                scheduleSessionExpiry(user.sessionToken);
                 setUserData({
                     userId: tgUser.id,
                     firstName: tgUser.first_name,
@@ -112,7 +141,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         } catch (e) {
             console.error("[TelegramAuth] Auth failed during Convex mutation:", e);
         }
-    }, [login]);
+    }, [login, scheduleSessionExpiry]);
 
     const loginStandalone = async () => {
         throw new Error("Standalone login is disabled. Use backdoor login with secret.");
@@ -122,20 +151,33 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         const user = await backdoorLoginMutation({ targetTelegramId, accessSecret });
         if (!user) return;
         setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
+        scheduleSessionExpiry(user.sessionToken);
         setUserData({
             userId: targetTelegramId,
             firstName: user.name,
             username: user.username,
             convexUser: { _id: user._id, role: user.role, tokenIdentifier: user.tokenIdentifier }
         });
-    }, [backdoorLoginMutation]);
+    }, [backdoorLoginMutation, scheduleSessionExpiry]);
 
     const logout = () => {
+        clearSessionExpiryTimer();
         clearAuthUser();
         setUserData({});
         // Reload to clear all states
         window.location.reload();
     };
+
+    const applyThemeVariables = useCallback((params: TelegramWebApp['themeParams']) => {
+        const root = document.documentElement;
+        if (params.bg_color) root.style.setProperty('--tg-theme-bg-color', params.bg_color);
+        if (params.text_color) root.style.setProperty('--tg-theme-text-color', params.text_color);
+        if (params.hint_color) root.style.setProperty('--tg-theme-hint-color', params.hint_color);
+        if (params.link_color) root.style.setProperty('--tg-theme-link-color', params.link_color);
+        if (params.button_color) root.style.setProperty('--tg-theme-button-color', params.button_color);
+        if (params.button_text_color) root.style.setProperty('--tg-theme-button-text-color', params.button_text_color);
+        if (params.secondary_bg_color) root.style.setProperty('--tg-theme-secondary-bg-color', params.secondary_bg_color);
+    }, []);
 
     useEffect(() => {
         const initTelegram = async () => {
@@ -146,13 +188,15 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                 // Check if already logged in via storage
                 if (storedUserId) {
                     const authToken = getAuthToken();
-                    setUserData({
-                        convexUser: { _id: storedUserId, role: getAuthRole()! }
-                    });
-                    if (!authToken) {
-                        sessionStorage.setItem('suica_security_reauth_notice', '1');
+                    if (!authToken || isAuthTokenExpired(authToken)) {
+                        sessionStorage.setItem(SESSION_REAUTH_NOTICE_KEY, '1');
                         clearAuthUser();
                         setUserData({});
+                    } else {
+                        setUserData({
+                            convexUser: { _id: storedUserId, role: getAuthRole()! }
+                        });
+                        scheduleSessionExpiry(authToken);
                     }
                 }
                 setIsReady(true);
@@ -188,6 +232,7 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
                     });
                     if (user) {
                         setAuthUser(user._id, user.role, user.studentId, user.sessionToken);
+                        scheduleSessionExpiry(user.sessionToken);
                         setUserData({
                             userId: tgWebApp.initDataUnsafe.user.id,
                             username: tgWebApp.initDataUnsafe.user.username,
@@ -212,12 +257,16 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         };
 
         initTelegram();
-    }, [login]);
+        return () => {
+            clearSessionExpiryTimer();
+        };
+    }, [applyThemeVariables, clearSessionExpiryTimer, login, scheduleSessionExpiry]);
 
+    const authToken = getAuthToken();
     const me = useQuery(
         api.users.getMe,
-        userData.convexUser?._id && getAuthToken()
-            ? { userId: userData.convexUser._id as any, authToken: getAuthToken()! }
+        userData.convexUser?._id && authToken && !isAuthTokenExpired(authToken)
+            ? { userId: userData.convexUser._id as any, authToken }
             : "skip"
     );
 
@@ -235,17 +284,6 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
             }
         }
     }, [me, userData.firstName, userData.userId]);
-
-    const applyThemeVariables = (params: TelegramWebApp['themeParams']) => {
-        const root = document.documentElement;
-        if (params.bg_color) root.style.setProperty('--tg-theme-bg-color', params.bg_color);
-        if (params.text_color) root.style.setProperty('--tg-theme-text-color', params.text_color);
-        if (params.hint_color) root.style.setProperty('--tg-theme-hint-color', params.hint_color);
-        if (params.link_color) root.style.setProperty('--tg-theme-link-color', params.link_color);
-        if (params.button_color) root.style.setProperty('--tg-theme-button-color', params.button_color);
-        if (params.button_text_color) root.style.setProperty('--tg-theme-button-text-color', params.button_text_color);
-        if (params.secondary_bg_color) root.style.setProperty('--tg-theme-secondary-bg-color', params.secondary_bg_color);
-    };
 
     const value: TelegramContextValue = {
         isReady,

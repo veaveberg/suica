@@ -16,6 +16,15 @@ import type { Attendance } from '../types';
 import { StudentSelector } from './StudentSelector';
 import { addStudentToGroup, removeStudentFromGroup } from '../db-server';
 
+const isValidAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    status === 'absence_valid' || status === 'old_absence_valid';
+
+const isInvalidAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    status === 'absence_invalid' || status === 'old_absence_invalid';
+
+const isAbsenceStatus = (status: AttendanceStatus | 'not_marked') =>
+    isValidAbsenceStatus(status) || isInvalidAbsenceStatus(status);
+
 interface LessonDetailSheetProps {
     lesson: Lesson | null;
     onClose: () => void;
@@ -82,6 +91,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             isUncoveredPresent: boolean;
             isUncoveredSkip: boolean;
             presentPaymentAmount?: number;
+            validSkipPaymentAmount?: number;
             skipPaymentAmount?: number;
         }> = {};
 
@@ -104,6 +114,21 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             }
 
             // Virtual 'absence_invalid' check
+            const resValidSkip = calculateStudentGroupBalanceWithAudit(
+                s.id!, lesson.group_id, subscriptions,
+                [...allAttendance, { student_id: s.id!, lesson_id: lesson.id!, status: 'absence_valid' } as Attendance],
+                lessons
+            );
+            const entryValidSkip = resValidSkip.auditEntries.find(e => String(e.lessonId) === String(lesson.id));
+
+            let validSkipCost = 0;
+            if (entryValidSkip?.coveredByPassId) {
+                const pass = subscriptions.find(sub => String(sub.id) === String(entryValidSkip.coveredByPassId));
+                if (pass && pass.lessons_total > 0) {
+                    validSkipCost = pass.price / pass.lessons_total;
+                }
+            }
+
             const resSkip = calculateStudentGroupBalanceWithAudit(
                 s.id!, lesson.group_id, subscriptions,
                 [...allAttendance, { student_id: s.id!, lesson_id: lesson.id!, status: 'absence_invalid' } as Attendance],
@@ -125,6 +150,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                 isUncoveredPresent: !!(entryPresent && !entryPresent.coveredByPassId && entryPresent.status === 'counted'),
                 isUncoveredSkip: !!(entrySkip && !entrySkip.coveredByPassId && entrySkip.status === 'counted'),
                 presentPaymentAmount: presentCost > 0 ? presentCost : undefined,
+                validSkipPaymentAmount: validSkipCost > 0 ? validSkipCost : undefined,
                 skipPaymentAmount: skipCost > 0 ? skipCost : undefined,
             };
         });
@@ -223,6 +249,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                 .map(([studentId, status]) => {
                     const info = studentStatusMap[studentId];
                     const amount = status === 'present' ? info?.presentPaymentAmount :
+                        status === 'absence_valid' ? info?.validSkipPaymentAmount :
                         status === 'absence_invalid' ? info?.skipPaymentAmount : undefined;
 
                     return {
@@ -318,7 +345,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
             isLongPressRef.current = false;
             skipTimerRef.current = setTimeout(() => {
                 isLongPressRef.current = true;
-                const nextSkipStatus = status === 'absence_valid' ? 'absence_invalid' : 'absence_valid';
+                const nextSkipStatus = isValidAbsenceStatus(status) ? 'absence_invalid' : 'absence_valid';
                 setStatus(nextSkipStatus, true);
                 if (navigator.vibrate) navigator.vibrate(50);
             }, 500);
@@ -333,7 +360,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
 
         const handleSkipClick = () => {
             if (isStudent || isLongPressRef.current) return;
-            if (status === 'absence_invalid' || status === 'absence_valid') {
+            if (isAbsenceStatus(status)) {
                 setStatus('not_marked');
             } else {
                 setStatus('absence_invalid');
@@ -384,7 +411,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
 
                             const showWarning = isMarked && (
                                 (localStatus === 'present' && studentInfo.isUncoveredPresent) ||
-                                (localStatus === 'absence_invalid' && studentInfo.isUncoveredSkip) ||
+                                (isInvalidAbsenceStatus(localStatus) && studentInfo.isUncoveredSkip) ||
                                 (record?.is_uncovered)
                             );
 
@@ -408,7 +435,8 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                     {(() => {
                                         // 1. Start with values from local virtual audit (most up-to-date with current UI state)
                                         let amount = (localStatus === 'present' ? studentInfo.presentPaymentAmount :
-                                            localStatus === 'absence_invalid' ? studentInfo.skipPaymentAmount : undefined);
+                                            localStatus === 'absence_valid' ? studentInfo.validSkipPaymentAmount :
+                                            isInvalidAbsenceStatus(localStatus) ? studentInfo.skipPaymentAmount : undefined);
 
                                         // 2. If local audit doesn't have a value, check the record from DB (historical)
                                         // BUT only if it's not explicitly uncovered according to our current logic
@@ -417,7 +445,7 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                                         }
 
                                         // 3. Override with live revenue calculation from Convex if available and marked
-                                        if (revInfo && (localStatus === 'present' || localStatus === 'absence_invalid')) {
+                                        if (revInfo && (localStatus === 'present' || isAbsenceStatus(localStatus))) {
                                             // Only override if we actually have a pass covering it according to revInfo
                                             // (or if we trust revInfo's judgment on 0-cost uncovered)
                                             if (revInfo.cost > 0 || studentInfo.hasActivePass) {
@@ -457,16 +485,16 @@ export const LessonDetailSheet: React.FC<LessonDetailSheetProps> = ({ lesson: pr
                         onPointerUp={handleSkipPointerUp}
                         onPointerLeave={handleSkipPointerUp}
                         onClick={handleSkipClick}
-                        className={`p-3 rounded-l-xl flex items-center justify-center transition-all select-none ${(status === 'absence_invalid' || status === 'absence_valid')
+                        className={`p-3 rounded-l-xl flex items-center justify-center transition-all select-none ${isAbsenceStatus(status)
                             ? 'bg-white dark:bg-zinc-700 shadow-sm'
                             : ''
                             }`}
                     >
-                        {status === 'absence_invalid' ? (
+                        {isInvalidAbsenceStatus(status) ? (
                             <div className="w-8 h-8 rounded-full bg-ios-red flex items-center justify-center">
                                 <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
                             </div>
-                        ) : status === 'absence_valid' ? (
+                        ) : isValidAbsenceStatus(status) ? (
                             <div className="w-8 h-8 rounded-full bg-ios-blue flex items-center justify-center">
                                 <X className="w-5 h-5 text-white dark:text-zinc-700" strokeWidth={4} />
                             </div>
