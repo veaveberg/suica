@@ -412,29 +412,29 @@ export const StudentCard: React.FC<StudentCardProps> = ({
         );
     }, [selectedFinanceAudit]);
 
+    const getEffectiveLessonsRemaining = React.useCallback((sub: Subscription) => {
+        const usage = selectedPassUsageById.get(String(sub.id));
+        if (!usage) return sub.lessons_total;
+        return Math.max((usage.effectiveLessonsTotal ?? sub.lessons_total) - usage.lessonsUsed, 0);
+    }, [selectedPassUsageById]);
+
     const selectedUsedSubs = React.useMemo(() => {
         return selectedGroupSubs.filter(sub => {
-            const usage = selectedPassUsageById.get(String(sub.id));
-            const lessonsRemaining = usage
-                ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
-                : sub.lessons_total;
+            const lessonsRemaining = getEffectiveLessonsRemaining(sub);
             const isArchived = sub.status === 'archived';
             const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
             return isArchived || isExpired || lessonsRemaining === 0;
         }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
-    }, [selectedGroupSubs, selectedPassUsageById, today]);
+    }, [selectedGroupSubs, getEffectiveLessonsRemaining, today]);
 
     const selectedActiveSubs = React.useMemo(() => {
         return selectedGroupSubs.filter(sub => {
-            const usage = selectedPassUsageById.get(String(sub.id));
-            const lessonsRemaining = usage
-                ? Math.max(sub.lessons_total - usage.lessonsUsed, 0)
-                : sub.lessons_total;
+            const lessonsRemaining = getEffectiveLessonsRemaining(sub);
             const isArchived = sub.status === 'archived';
             const isExpired = !!(sub.expiry_date && sub.expiry_date < today);
             return !isArchived && !isExpired && lessonsRemaining > 0;
         }).sort((a, b) => b.purchase_date.localeCompare(a.purchase_date));
-    }, [selectedGroupSubs, selectedPassUsageById, today]);
+    }, [selectedGroupSubs, getEffectiveLessonsRemaining, today]);
 
     const selectedGroupPasses = React.useMemo(() => {
         return selectedFinanceGroup
@@ -1100,7 +1100,10 @@ export const StudentCard: React.FC<StudentCardProps> = ({
                                                             const cardDates = getSubscriptionCardDates(sub);
                                                             const passUsage = selectedFinanceAudit.passUsage.find(item => item.passId === sub.id);
                                                             const lessonsUsed = passUsage?.lessonsUsed || 0;
-                                                            const lessonsRemaining = Math.max(sub.lessons_total - lessonsUsed, 0);
+                                                            const lessonsRemaining = Math.max(
+                                                                (selectedPassUsageById.get(String(sub.id))?.effectiveLessonsTotal ?? sub.lessons_total) - lessonsUsed,
+                                                                0
+                                                            );
                                                             return (
                                                                 <PassCard
                                                                     key={sub.id}

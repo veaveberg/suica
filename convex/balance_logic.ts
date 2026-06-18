@@ -41,6 +41,7 @@ export interface PassUsage {
     passId: string;
     lessonsUsed: number;
     lessonsTotal: number;
+    effectiveLessonsTotal: number;
     purchaseDate: string;
     expiryDate?: string;
 }
@@ -311,10 +312,15 @@ export function calculateStudentGroupBalanceWithAudit(
     }
 
     const totalOwedCount = auditEntries.filter(e => e.status === 'counted').length;
-    // Total capacity only includes passes that were actually used OR are still active
-    const totalCapacity = studentPasses
-        .filter(p => (p.status === 'active' || !p.status) || (passUsageMap.get(p._id) || 0) > 0)
-        .reduce((sum, p) => sum + p.lessons_total, 0);
+    const isExpiredArchivedPass = (pass: Doc<"subscriptions">): boolean =>
+        pass.status === 'archived' && (!!pass.expiry_date && pass.expiry_date < today);
+
+    // Expired archived passes should not keep their unused remainder in the current balance.
+    const totalCapacity = studentPasses.reduce((sum, pass) => {
+        const used = passUsageMap.get(pass._id) || 0;
+        const effectiveLessonsTotal = isExpiredArchivedPass(pass) ? used : pass.lessons_total;
+        return sum + effectiveLessonsTotal;
+    }, 0);
 
     const allStudentPasses = subscriptions.filter(s =>
         s.user_id === studentId &&
@@ -325,6 +331,7 @@ export function calculateStudentGroupBalanceWithAudit(
         passId: pass._id,
         lessonsUsed: passUsageMap.get(pass._id) || 0,
         lessonsTotal: pass.lessons_total,
+        effectiveLessonsTotal: isExpiredArchivedPass(pass) ? (passUsageMap.get(pass._id) || 0) : pass.lessons_total,
         purchaseDate: pass.purchase_date,
         expiryDate: pass.expiry_date
     }));

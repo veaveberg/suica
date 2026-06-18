@@ -213,13 +213,14 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                                         const passTemplate = sub ? getPassTemplate(sub) : undefined;
 
                                         if (passTemplate) {
+                                            const remainingLessons = Math.max(pu.effectiveLessonsTotal - pu.lessonsUsed, 0);
                                             return (
                                                 <PassCard
                                                     key={pu.passId}
-                                                    pass={{ ...passTemplate, lessons_count: pu.lessonsTotal - pu.lessonsUsed }}
+                                                    pass={{ ...passTemplate, lessons_count: remainingLessons }}
                                                     groupsList={[group]}
                                                     showChevron={false}
-                                                    totalLessons={pu.lessonsTotal}
+                                                    totalLessons={pu.effectiveLessonsTotal}
                                                     startDate={pu.purchaseDate}
                                                     endDate={pu.expiryDate}
                                                 />
@@ -234,13 +235,13 @@ export const BalanceAuditSheet: React.FC<BalanceAuditSheetProps> = ({
                                                         {sub ? getPassDisplayName(sub, t) : `Pass #${pu.passId} `}
                                                     </span>
                                                     <span className="text-xs text-ios-gray">
-                                                        {pu.lessonsTotal - pu.lessonsUsed}/{pu.lessonsTotal} {t('lessons_remaining_count') || 'remaining'}
+                                                        {Math.max(pu.effectiveLessonsTotal - pu.lessonsUsed, 0)}/{pu.effectiveLessonsTotal} {t('lessons_remaining_count') || 'remaining'}
                                                     </span>
                                                 </div>
                                                 <div className="h-2 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                                                     <div
                                                         className="h-full bg-ios-blue rounded-full"
-                                                        style={{ width: `${((pu.lessonsTotal - pu.lessonsUsed) / pu.lessonsTotal) * 100}% ` }}
+                                                        style={{ width: `${(pu.effectiveLessonsTotal > 0 ? Math.max((pu.effectiveLessonsTotal - pu.lessonsUsed) / pu.effectiveLessonsTotal, 0) : 0) * 100}% ` }}
                                                     />
                                                 </div>
                                             </div>
