@@ -132,19 +132,27 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         )}>
             {/* Header with Settings */}
             <header
-                className="shrink-0 z-40 flex items-center justify-between p-4 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-zinc-800"
+                className={cn("shrink-0 z-40 p-4 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-zinc-800", activeTab === 'calendar' ? 'flex flex-col gap-2' : 'flex items-center justify-between')}
                 style={{ paddingTop: 'max(1rem, var(--safe-area-inset-top))' }}
             >
-                {activeTab === 'calendar' && managedSpaces.length > 0
-                    ? <div className="flex min-w-0 items-center gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /><CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} />{calendarSource.kind === 'space' && <button type="button" onClick={() => setIsEditingSpaceHours(true)} aria-label={t('space_edit_hours')} className="shrink-0 rounded-lg p-2 text-ios-gray active:bg-black/5 dark:active:bg-white/10"><Pencil className="h-4 w-4" /></button>}</div>
-                    : <h1 className="flex min-w-0 items-center gap-2"><CalendarPeriodTitle fallback={tabs.find(t => t.id === activeTab)?.label} period={activeTab === 'calendar' ? calendarPeriodDisplay : ''} /></h1>}
+                {activeTab === 'calendar' && calendarSource.kind === 'space' ? <>
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2"><CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} /><button type="button" onClick={() => setIsEditingSpaceHours(true)} aria-label={t('space_edit_hours')} className="shrink-0 rounded-lg p-2 text-ios-gray active:bg-black/5 dark:active:bg-white/10"><Pencil className="h-4 w-4" /></button><SpaceShareDropdown space={calendarSource.space} onPreparePost={() => setParam('sheet', 'space-post')} /></div>
+                        <div className="flex shrink-0 items-center gap-2"><button onClick={() => setShowSettings(true)} className="p-2 rounded-full bg-ios-background dark:bg-zinc-800 active:scale-95 transition-transform"><Settings className="w-5 h-5 text-ios-gray" /></button></div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-baseline gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /></div><SpaceViewDropdown mode={spaceCalendarMode} display={spaceCalendarDisplay} onModeChange={value => setParam('view', value)} onDisplayChange={value => setParam('display', value)} /></div>
+                </> : activeTab === 'calendar' && calendarSource.kind === 'groups' ? <>
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                        <CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} />
+                        <button onClick={() => setShowSettings(true)} className="p-2 rounded-full bg-ios-background dark:bg-zinc-800 active:scale-95 transition-transform"><Settings className="w-5 h-5 text-ios-gray" /></button>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-baseline gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /></div>
+                        <button onClick={() => setIsSelectionMode(!isSelectionMode)} className="text-ios-blue font-semibold px-2 active:opacity-50 transition-opacity">{isSelectionMode ? t('cancel') : t('select')}</button>
+                    </div>
+                </> : <>
+                    <h1 className="flex min-w-0 items-center gap-2"><CalendarPeriodTitle fallback={tabs.find(t => t.id === activeTab)?.label} period={activeTab === 'calendar' ? calendarPeriodDisplay : ''} /></h1>
                 <div className="flex items-center gap-2">
-                    {activeTab === 'calendar' && calendarSource.kind === 'space' && (
-                        <>
-                            <SpaceViewDropdown mode={spaceCalendarMode} display={spaceCalendarDisplay} onModeChange={value => setParam('view', value)} onDisplayChange={value => setParam('display', value)} />
-                            <SpaceShareDropdown space={calendarSource.space} onPreparePost={() => setParam('sheet', 'space-post')} />
-                        </>
-                    )}
                     {(activeTab === 'classes' || (activeTab === 'calendar' && calendarSource.kind === 'groups')) && (
                         <button
                             onClick={() => setIsSelectionMode(!isSelectionMode)}
@@ -160,6 +168,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                         <Settings className="w-5 h-5 text-ios-gray" />
                     </button>
                 </div>
+                </>}
             </header>
 
             {/* Main Content Area */}

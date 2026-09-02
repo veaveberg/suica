@@ -97,8 +97,36 @@ function AuthenticatedApp() {
   )
 }
 
+function publicTokenFromCurrentUrl(): string | null {
+  const url = new URL(window.location.href)
+  const forwardedPath = url.searchParams.get('__public_path')
+  if (forwardedPath?.startsWith('/') && !forwardedPath.startsWith('//')) {
+    const forwardedUrl = new URL(forwardedPath, window.location.origin)
+    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '')
+    const restoredPath = `${basePath}${forwardedUrl.pathname}${forwardedUrl.search}${forwardedUrl.hash}`
+    window.history.replaceState({}, '', restoredPath)
+    return forwardedUrl.pathname.split('/').filter(Boolean).at(-1) ?? null
+  }
+
+  const queryToken = url.searchParams.get('space')
+  if (queryToken) return queryToken
+
+  const basePath = import.meta.env.BASE_URL
+  const relativePath = url.pathname.startsWith(basePath)
+    ? url.pathname.slice(basePath.length)
+    : url.pathname.replace(/^\/+/, '')
+  const segments = relativePath.split('/').filter(Boolean)
+  if (segments.length !== 1) return null
+
+  try {
+    return decodeURIComponent(segments[0])
+  } catch {
+    return null
+  }
+}
+
 function App() {
-  const publicToken = new URLSearchParams(window.location.search).get('space')
+  const publicToken = publicTokenFromCurrentUrl()
   if (publicToken) return <PublicSpacePage publicToken={publicToken} />
 
   return <TelegramProvider>

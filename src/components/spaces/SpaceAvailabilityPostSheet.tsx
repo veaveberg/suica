@@ -17,10 +17,10 @@ interface Props {
 
 const WEEKDAY_KEYS: (keyof WorkingHours)[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const POST_LANGUAGES: { value: Language; label: string }[] = [
-    { value: 'EN', label: 'English' },
-    { value: 'UK', label: 'Українська' },
-    { value: 'RU', label: 'Русский' },
     { value: 'KA', label: 'ქართული' },
+    { value: 'EN', label: 'English' },
+    { value: 'RU', label: 'Русский' },
+    { value: 'UK', label: 'Українська' },
 ];
 const GEORGIAN_WEEKDAYS = ['კვირა', 'ორშაბათი', 'სამშაბათი', 'ოთხშაბათი', 'ხუთშაბათი', 'პარასკევი', 'შაბათი'];
 

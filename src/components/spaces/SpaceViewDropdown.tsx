@@ -5,16 +5,17 @@ import { cn } from '../../utils/cn';
 import type { SpaceCalendarContent, SpaceCalendarMode } from './spaceCalendarModel';
 
 export type SpaceCalendarDisplay = SpaceCalendarContent;
+export type SpaceThemeMode = 'auto' | 'light' | 'dark';
 
-interface Props {
+type Props = {
     mode: SpaceCalendarMode;
     display: SpaceCalendarDisplay;
     onModeChange: (mode: SpaceCalendarMode) => void;
     onDisplayChange: (display: SpaceCalendarDisplay) => void;
     showDisplayToggle?: boolean;
-}
+} & ({ onThemeModeChange: (mode: SpaceThemeMode) => void; themeMode: SpaceThemeMode } | { onThemeModeChange?: never; themeMode?: never });
 
-export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange, showDisplayToggle = true }: Props) {
+export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange, onThemeModeChange, showDisplayToggle = true, themeMode }: Props) {
     const { t } = useTranslation();
     const detailsRef = useRef<HTMLDetailsElement>(null);
     useEffect(() => {
@@ -46,6 +47,9 @@ export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange
             </div>
             {showDisplayToggle && <div aria-label={t('availability')} className="mt-2 flex flex-col rounded-xl bg-ios-background p-1 dark:bg-zinc-800">
                 {(['availability', 'events'] as const).map(value => <button key={value} type="button" onClick={() => choose(() => onDisplayChange(value))} className={cn('rounded-lg px-2.5 py-2 text-left text-xs font-semibold', display === value ? 'bg-white text-ios-blue shadow-sm dark:bg-zinc-700' : 'text-ios-gray')}>{t(value)}</button>)}
+            </div>}
+            {onThemeModeChange && themeMode && <div aria-label={t('theme')} className="mt-2 flex flex-col rounded-xl bg-ios-background p-1 dark:bg-zinc-800">
+                {(['auto', 'light', 'dark'] as const).map(value => <button key={value} type="button" onClick={() => choose(() => onThemeModeChange(value))} className={cn('rounded-lg px-2.5 py-2 text-left text-xs font-semibold', themeMode === value ? 'bg-white text-ios-blue shadow-sm dark:bg-zinc-700' : 'text-ios-gray')}>{t(value)}</button>)}
             </div>}
         </div>
     </details>;

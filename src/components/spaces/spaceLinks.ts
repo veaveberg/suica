@@ -1,9 +1,9 @@
 import type { ManagedSpace } from '../../space-types';
 
-export function publicSpaceUrl(space: ManagedSpace, view: 'month' | 'week' = 'week'): string {
-    const url = new URL(import.meta.env.BASE_URL, window.location.origin);
-    url.searchParams.set('space', space.slug);
-    url.searchParams.set('view', view);
+export function publicSpaceUrl(space: ManagedSpace, view: 'month' | 'week' = 'month'): string {
+    const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const url = new URL(`${basePath}/${encodeURIComponent(space.slug)}`, window.location.origin);
+    if (view === 'week') url.searchParams.set('view', view);
     return url.toString();
 }
 
