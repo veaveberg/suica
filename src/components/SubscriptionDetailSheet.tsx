@@ -4,6 +4,7 @@ import { Trash2, Clock, Calendar, ChevronsRight, Check } from 'lucide-react';
 import { useData } from '../DataProvider';
 import type { Subscription } from '../types';
 import * as api from '../api';
+import { getLocale } from '../utils/formatting';
 
 function getTodayLocalDate(): string {
     const now = new Date();
@@ -291,7 +292,7 @@ export const SubscriptionDetailSheet: React.FC<SubscriptionDetailSheetProps> = (
                                             const date = new Date(y, m - 1, d);
                                             const lang = i18n.language.toUpperCase();
                                             const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' };
-                                            const locale = lang === 'KA' ? 'ka-GE' : lang === 'RU' ? 'ru' : 'en-US';
+                                            const locale = getLocale(lang);
                                             return date.toLocaleDateString(locale, options);
                                         })()}
                                     </div>

@@ -11,10 +11,12 @@ import {
     usePasses,
     usePassGroups,
     useAttendance,
-    useExternalCalendars
+    useExternalCalendars,
+    useManagedSpaces,
 } from './db-server';
 import { checkAndArchiveExpired } from './utils/balance';
 import type { Group, Student, Lesson, Subscription, GroupSchedule, StudentGroup, Tariff, Pass, PassGroup, Attendance, ExternalCalendar } from './types';
+import type { ManagedSpace } from './space-types';
 
 interface DataContextType {
     groups: Group[];
@@ -28,6 +30,7 @@ interface DataContextType {
     passGroups: PassGroup[];
     attendance: Attendance[];
     externalCalendars: ExternalCalendar[];
+    managedSpaces: ManagedSpace[];
     loading: boolean;
     refreshAll: () => Promise<void>;
     refreshGroups: () => Promise<void>;
@@ -41,6 +44,7 @@ interface DataContextType {
     refreshPassGroups: () => Promise<void>;
     refreshAttendance: () => Promise<void>;
     refreshExternalCalendars: () => Promise<void>;
+    refreshManagedSpaces: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -57,6 +61,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const passGroups = usePassGroups();
     const attendance = useAttendance();
     const externalCalendars = useExternalCalendars();
+    const managedSpaces = useManagedSpaces();
 
     const loading = groups.loading || students.loading || lessons.loading || subscriptions.loading || passes.loading || attendance.loading;
 
@@ -72,7 +77,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
             passes.refresh(),
             passGroups.refresh(),
             attendance.refresh(),
-            externalCalendars.refresh()
+            externalCalendars.refresh(),
+            managedSpaces.refresh(),
         ]);
     };
 
@@ -99,6 +105,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         passGroups: passGroups.data,
         attendance: attendance.data,
         externalCalendars: externalCalendars.data,
+        managedSpaces: managedSpaces.data,
         loading,
         refreshAll,
         refreshGroups: groups.refresh,
@@ -111,7 +118,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         refreshPasses: passes.refresh,
         refreshPassGroups: passGroups.refresh,
         refreshAttendance: attendance.refresh,
-        refreshExternalCalendars: externalCalendars.refresh
+        refreshExternalCalendars: externalCalendars.refresh,
+        refreshManagedSpaces: managedSpaces.refresh,
     }), [
         groups.data,
         students.data,
@@ -124,6 +132,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         passGroups.data,
         attendance.data,
         externalCalendars.data,
+        managedSpaces.data,
         loading
     ]);
 

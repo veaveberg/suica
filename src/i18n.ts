@@ -9,6 +9,7 @@ i18n
             RU: { translation: translations.RU },
             EN: { translation: translations.EN },
             KA: { translation: translations.KA },
+            UK: { translation: translations.UK },
         },
         lng: 'RU',
         fallbackLng: 'EN',

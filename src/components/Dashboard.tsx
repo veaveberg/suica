@@ -7,7 +7,7 @@ import { LessonDetailSheet } from './LessonDetailSheet';
 import { useData } from '../DataProvider';
 import { deleteLessons } from '../db-server';
 import { cn } from '../utils/cn';
-import { formatDate, formatTimeRange, formatCurrency } from '../utils/formatting';
+import { formatDate, formatTimeRange, formatCurrency, getLocale } from '../utils/formatting';
 import { getCachedEvents, fetchAllExternalEvents, openExternalEvent } from '../utils/ical';
 import { useParam, useSetParam } from '../hooks/useSearchParams';
 import type { ExternalEvent } from '../types';
@@ -72,7 +72,7 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ lessons: fallba
 
     // Fetch external calendar events
     useEffect(() => {
-        if (!externalCalendars) return;
+        if (isActive === false || !externalCalendars) return;
 
         const cached = getCachedEvents();
         setExternalEvents(cached);
@@ -84,7 +84,7 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ lessons: fallba
             console.error('Dashboard: Failed to fetch external events:', err);
             setIsFetchingExternal(false);
         });
-    }, [externalEventsRefresh, externalCalendars]);
+    }, [externalEventsRefresh, externalCalendars, isActive]);
 
 
     // Clear selection when mode is turned off
@@ -250,7 +250,7 @@ export const Dashboard: React.FC<DashboardProps> = React.memo(({ lessons: fallba
     const formatTodayHeader = () => {
         const date = new Date();
         const lang = i18n.language.toUpperCase();
-        const locale = lang === 'KA' ? 'ka-GE' : lang === 'RU' ? 'ru' : 'en-US';
+        const locale = getLocale(lang);
         const weekday = date.toLocaleDateString(locale, { weekday: 'short' });
         const monthDay = date.toLocaleDateString(locale, { month: 'long', day: 'numeric' });
         return `${t('today')}, ${weekday}, ${monthDay}`;

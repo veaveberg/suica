@@ -5,7 +5,10 @@ import type { i18n } from 'i18next';
  */
 export function getLocale(lang: string): string {
     const upperLang = lang.toUpperCase();
-    return upperLang === 'KA' ? 'ka-GE' : upperLang === 'RU' ? 'ru-RU' : 'en-US';
+    if (upperLang === 'KA') return 'ka-GE';
+    if (upperLang === 'RU') return 'ru-RU';
+    if (upperLang === 'UK') return 'uk-UA';
+    return 'en-US';
 }
 
 export interface FormatDateOptions {
@@ -24,11 +27,7 @@ export function formatDate(dateStr: string, i18n: i18n, options: FormatDateOptio
 
     let dateOptions: Intl.DateTimeFormatOptions;
 
-    if (lang === 'KA') {
-        dateOptions = includeWeekday
-            ? { weekday: weekdayFormat, day: 'numeric', month: 'long' }
-            : { day: 'numeric', month: 'long' };
-    } else if (lang === 'RU') {
+    if (lang !== 'EN') {
         dateOptions = includeWeekday
             ? { weekday: weekdayFormat, day: 'numeric', month: 'long' }
             : { day: 'numeric', month: 'long' };

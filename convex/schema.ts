@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { workingHoursValidator } from "./spaceValidators";
 
 export default defineSchema({
     users: defineTable({
@@ -145,4 +146,51 @@ export default defineSchema({
     })
         .index("by_user", ["userId"])
         .index("by_token", ["token"]),
+
+    spaces: defineTable({
+        name: v.string(),
+        slug: v.string(),
+        logoPath: v.string(),
+        color: v.string(),
+        timeZone: v.string(),
+        status: v.union(v.literal("active"), v.literal("archived")),
+        publicToken: v.string(),
+        calendarSourceEnvKey: v.string(),
+        minimumAvailabilityMinutes: v.number(),
+        workingHours: workingHoursValidator,
+        syncState: v.union(v.literal("pending"), v.literal("syncing"), v.literal("ready"), v.literal("error")),
+        activeRevision: v.optional(v.string()),
+        lastSyncedAt: v.optional(v.number()),
+        availabilityStartDate: v.optional(v.string()),
+        availabilityEndDate: v.optional(v.string()),
+        lastSyncError: v.optional(v.string()),
+    })
+        .index("by_slug", ["slug"])
+        .index("by_public_token", ["publicToken"]),
+
+    space_managers: defineTable({
+        spaceId: v.id("spaces"),
+        userId: v.id("users"),
+    })
+        .index("by_user", ["userId"])
+        .index("by_space", ["spaceId"])
+        .index("by_user_space", ["userId", "spaceId"]),
+
+    space_availability_days: defineTable({
+        spaceId: v.id("spaces"),
+        revision: v.string(),
+        date: v.string(),
+        windows: v.array(v.object({ start: v.number(), end: v.number() })),
+    })
+        .index("by_space_revision", ["spaceId", "revision"])
+        .index("by_space_revision_date", ["spaceId", "revision", "date"]),
+
+    space_calendar_events: defineTable({
+        spaceId: v.id("spaces"),
+        revision: v.string(),
+        start: v.number(),
+        end: v.number(),
+        title: v.string(),
+        allDay: v.boolean(),
+    }).index("by_space_revision", ["spaceId", "revision"]),
 });

@@ -4,6 +4,7 @@ import { TelegramLoginWidget } from './TelegramLoginWidget';
 import { SettingsSheet } from './SettingsSheet';
 
 import { Settings, X } from 'lucide-react';
+import type { Language } from '../types';
 
 interface LoginPageProps {
     onTelegramAuth: (user: any) => void;
@@ -13,7 +14,7 @@ interface LoginPageProps {
     isDark: boolean;
     themeMode: 'auto' | 'light' | 'dark';
     onChangeThemeMode: (mode: 'auto' | 'light' | 'dark') => void;
-    onChangeLanguage: (lang: any) => void;
+    onChangeLanguage: (lang: Language) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({

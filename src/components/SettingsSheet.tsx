@@ -377,6 +377,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
                     onChange={onChangeLanguage}
                     options={[
                         { label: 'English', value: 'EN' },
+                        { label: 'Українська', value: 'UK' },
                         { label: 'Русский', value: 'RU' },
                         { label: 'ქართული', value: 'KA' },
                     ]}

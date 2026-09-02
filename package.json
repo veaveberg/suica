@@ -9,6 +9,8 @@
     "start": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:translations": "node scripts/check-translations.mjs",
+    "test:spaces": "node --test scripts/space-availability.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -29,6 +31,7 @@
     "express": "^5.2.1",
     "i18next": "^25.7.3",
     "lucide-react": "^0.562.0",
+    "node-ical": "^0.27.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.0",

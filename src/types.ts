@@ -124,7 +124,7 @@ export interface PassGroup {
   group_id: string;
 }
 
-export type Language = 'RU' | 'EN' | 'KA';
+export type Language = 'RU' | 'EN' | 'KA' | 'UK';
 
 export interface ExternalCalendar {
   id?: string;

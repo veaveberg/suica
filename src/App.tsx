@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import './i18n'
 import { useTranslation } from 'react-i18next'
 import type { Language } from './types'
-import { useTelegram } from './components/TelegramProvider'
+import { TelegramProvider, useTelegram } from './components/TelegramProvider'
 import { LoginPage } from './components/LoginPage'
 import { TeacherApp } from './components/TeacherApp'
+import { DataProvider } from './DataProvider'
+import { PublicSpacePage } from './components/spaces/PublicSpacePage'
 
-function App() {
+function AuthenticatedApp() {
   const { i18n } = useTranslation()
   const { colorScheme: tgColorScheme, isTelegram, convexUser, onAuth, isReady, authError } = useTelegram()
   const securityNotice = !convexUser && sessionStorage.getItem('suica_security_reauth_notice')
@@ -93,6 +95,17 @@ function App() {
       onChangeLanguage={changeLanguage}
     />
   )
+}
+
+function App() {
+  const publicToken = new URLSearchParams(window.location.search).get('space')
+  if (publicToken) return <PublicSpacePage publicToken={publicToken} />
+
+  return <TelegramProvider>
+    <DataProvider>
+      <AuthenticatedApp />
+    </DataProvider>
+  </TelegramProvider>
 }
 
 export default App

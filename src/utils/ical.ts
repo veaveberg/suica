@@ -82,12 +82,83 @@ function unescapeText(text: string): string {
         .replace(/\\\\/g, '\\');
 }
 
+function parseRecurrenceRule(rule: string): Map<string, string> {
+    return new Map(rule.split(';').flatMap(part => {
+        const [key, value] = part.split('=', 2);
+        return key && value ? [[key.toUpperCase(), value]] : [];
+    }));
+}
+
+function startOfLocalDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysBetween(left: Date, right: Date): number {
+    return Math.round((startOfLocalDay(left).getTime() - startOfLocalDay(right).getTime()) / 86_400_000);
+}
+
+function weeksBetween(left: Date, right: Date): number {
+    const monday = (date: Date) => {
+        const result = startOfLocalDay(date);
+        result.setDate(result.getDate() - ((result.getDay() + 6) % 7));
+        return result;
+    };
+    return Math.round((monday(left).getTime() - monday(right).getTime()) / (7 * 86_400_000));
+}
+
+function monthsBetween(left: Date, right: Date): number {
+    return (left.getFullYear() - right.getFullYear()) * 12 + left.getMonth() - right.getMonth();
+}
+
+function recurrenceStart(base: Date, date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes(), base.getSeconds(), base.getMilliseconds());
+}
+
+function expandRecurringEvent(event: ExternalEvent, rule: string, excludedStarts: Date[]): ExternalEvent[] {
+    if (!rule) return [event];
+    const parts = parseRecurrenceRule(rule);
+    const frequency = parts.get('FREQ');
+    if (frequency !== 'DAILY' && frequency !== 'WEEKLY' && frequency !== 'MONTHLY') return [event];
+
+    const interval = Math.max(1, Number(parts.get('INTERVAL') ?? '1'));
+    const count = Math.max(0, Number(parts.get('COUNT') ?? '0'));
+    const until = parts.get('UNTIL') ? parseICalDate(parts.get('UNTIL')!) : null;
+    const byDays = new Set((parts.get('BYDAY') ?? '').split(',').filter(Boolean).map(value => value.slice(-2)));
+    const dayCodes = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+    const excluded = new Set(excludedStarts.map(value => value.getTime()));
+    const now = new Date();
+    const horizonStart = new Date(now.getFullYear(), now.getMonth() - 7, 1);
+    const horizonEnd = new Date(now.getFullYear() + 2, now.getMonth(), 1);
+    const duration = Math.max(0, event.end.getTime() - event.start.getTime());
+    const occurrences: ExternalEvent[] = [];
+    let generated = 0;
+
+    for (let day = startOfLocalDay(event.start); day <= horizonEnd; day.setDate(day.getDate() + 1)) {
+        const start = recurrenceStart(event.start, day);
+        if (start < event.start) continue;
+        if (until && start > until) break;
+        const matches = frequency === 'DAILY'
+            ? daysBetween(day, event.start) % interval === 0
+            : frequency === 'WEEKLY'
+                ? weeksBetween(day, event.start) % interval === 0 && (byDays.size === 0 ? day.getDay() === event.start.getDay() : byDays.has(dayCodes[day.getDay()]))
+                : monthsBetween(day, event.start) % interval === 0 && day.getDate() === event.start.getDate();
+        if (!matches) continue;
+        generated += 1;
+        if (count > 0 && generated > count) break;
+        if (start < horizonStart || excluded.has(start.getTime())) continue;
+        occurrences.push({ ...event, uid: `${event.uid}-${start.getTime()}`, start, end: new Date(start.getTime() + duration) });
+    }
+    return occurrences;
+}
+
 export function parseICalFeed(icsContent: string, calendarName?: string, calendarColor?: string, calendarId?: string): ExternalEvent[] {
     const events: ExternalEvent[] = [];
     const lines = unfoldLines(icsContent);
 
     let inEvent = false;
     let currentEvent: Partial<ExternalEvent> = {};
+    let recurrenceRule = '';
+    let excludedStarts: Date[] = [];
 
     let calendarTimeZone = '';
 
@@ -110,13 +181,15 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
         if (line === 'BEGIN:VEVENT') {
             inEvent = true;
             currentEvent = { calendarName, calendarColor, calendarId };
+            recurrenceRule = '';
+            excludedStarts = [];
             continue;
         }
 
         if (line === 'END:VEVENT') {
             inEvent = false;
             if (currentEvent.uid && currentEvent.start && currentEvent.title) {
-                events.push({
+                const event: ExternalEvent = {
                     uid: currentEvent.uid,
                     title: currentEvent.title,
                     start: currentEvent.start,
@@ -128,7 +201,8 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
                     calendarName: currentEvent.calendarName,
                     calendarColor: currentEvent.calendarColor,
                     calendarId: currentEvent.calendarId,
-                });
+                };
+                events.push(...expandRecurringEvent(event, recurrenceRule, excludedStarts));
             }
             currentEvent = {};
             continue;
@@ -165,6 +239,12 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
                 break;
             case 'URL':
                 currentEvent.url = value.trim();
+                break;
+            case 'RRULE':
+                recurrenceRule = value.trim();
+                break;
+            case 'EXDATE':
+                excludedStarts.push(...value.split(',').map(date => parseICalDate(date, tzid)));
                 break;
         }
     }

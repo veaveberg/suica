@@ -23,11 +23,17 @@ function getSearchString() {
 
 // Stable setParam that can be used without a hook
 export function setParam(key: string, value: string | null) {
+    setParams({ [key]: value });
+}
+
+export function setParams(changes: Record<string, string | null>) {
     const url = new URL(window.location.href);
-    if (value === null) {
-        url.searchParams.delete(key);
-    } else {
-        url.searchParams.set(key, value);
+    for (const [key, value] of Object.entries(changes)) {
+        if (value === null) {
+            url.searchParams.delete(key);
+        } else {
+            url.searchParams.set(key, value);
+        }
     }
     window.history.pushState({}, '', url.toString());
     notifyAll();

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format, addDays, subMonths, isToday, getDate } from 'date-fns';
-import { ru, ka, enUS } from 'date-fns/locale';
+import { ru, ka, enUS, uk } from 'date-fns/locale';
 import { Loader2, Users, Check, Calendar, Clock, Timer } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
@@ -18,7 +18,7 @@ import * as api from '../api';
 import { deleteLessons } from '../db-server';
 
 interface CalendarViewProps {
-  onYearChange?: (year: string) => void;
+  onPeriodChange?: (period: string) => void;
   externalEventsRefresh?: number; // Increment to trigger refresh
   isActive?: boolean;
   isSelectionMode?: boolean;
@@ -34,7 +34,7 @@ interface DragState {
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
-  onYearChange,
+  onPeriodChange,
   externalEventsRefresh,
   isActive,
   isSelectionMode = false,
@@ -148,6 +148,7 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
     const lang = i18n.language.toUpperCase();
     if (lang === 'KA') return ka;
     if (lang === 'RU') return ru;
+    if (lang === 'UK') return uk;
     return enUS;
   }, [i18n.language]);
 
@@ -492,14 +493,12 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
 
       const containerRect = container.getBoundingClientRect();
       const visibleCells = container.querySelectorAll<HTMLElement>('[data-year]');
-      const years = new Set<number>();
       let visibleStart: string | null = null;
       let visibleEnd: string | null = null;
 
       visibleCells.forEach(cell => {
         const rect = cell.getBoundingClientRect();
         if (rect.top < containerRect.bottom && rect.bottom > containerRect.top) {
-          years.add(parseInt(cell.getAttribute('data-year') || '0', 10));
           const date = cell.getAttribute('data-date');
           if (date) {
             if (!visibleStart || date < visibleStart) visibleStart = date;
@@ -512,15 +511,9 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
         setVisibleDateRange(visibleStart, visibleEnd);
       }
 
-      if (onYearChange) {
-        const yearsArray = Array.from(years).sort();
-        if (yearsArray.length === 0) {
-          onYearChange(new Date().getFullYear().toString());
-        } else if (yearsArray.length === 1) {
-          onYearChange(yearsArray[0].toString());
-        } else {
-          onYearChange(`${yearsArray[0]}–${yearsArray[yearsArray.length - 1]}`);
-        }
+      if (onPeriodChange) {
+        const visibleDate = visibleStart ? new Date(`${visibleStart}T12:00:00`) : new Date();
+        onPeriodChange(format(visibleDate, 'LLLL yyyy', { locale: currentLocale }));
       }
     };
 
@@ -544,7 +537,7 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
         container.removeEventListener('wheel', onInteraction);
       };
     }
-  }, [onYearChange, dragState]);
+  }, [onPeriodChange, dragState, currentLocale]);
 
   const weekDays = useMemo(() => {
     const now = new Date();

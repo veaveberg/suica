@@ -8,6 +8,7 @@ import type { Group, Student, StudentGroup, Subscription, Lesson, GroupSchedule,
 import { GROUP_COLORS } from './constants/colors';
 import type { Id } from '../convex/_generated/dataModel';
 import type { CurrentAttendanceStatus } from './types';
+import type { WorkingHours } from './space-types';
 
 export { GROUP_COLORS };
 
@@ -94,6 +95,26 @@ export function useExternalCalendars() {
     const { convexUser } = useTelegram();
     const isTeacher = convexUser?.role === 'teacher' || convexUser?.role === 'admin';
     return useDataQuery<ExternalCalendar>(api.calendars.get, convexUser?._id, !isTeacher);
+}
+
+export function useManagedSpaces() {
+    const { convexUser } = useTelegram();
+    const authToken = getAuthToken();
+    const hasValidAuth = !!convexUser?._id && !!authToken && !isAuthTokenExpired(authToken);
+    const data = useQuery(
+        api.spaces.listManaged,
+        hasValidAuth ? { userId: convexUser._id as Id<"users">, authToken } : "skip"
+    );
+    return {
+        data: data ?? [],
+        loading: hasValidAuth && data === undefined,
+        refresh: React.useCallback(async () => { /* Convex queries update automatically. */ }, []),
+    };
+}
+
+export async function updateSpaceWorkingHours(spaceId: Id<"spaces">, workingHours: WorkingHours): Promise<void> {
+    const { userId, authToken } = requireAuth();
+    await convex.mutation(api.spaces.updateWorkingHours, { userId, authToken, spaceId, workingHours });
 }
 
 // ============================================

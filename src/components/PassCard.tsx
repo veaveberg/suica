@@ -1,4 +1,5 @@
 import React from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ChevronRight } from 'lucide-react';
 import type { Pass, Group } from '../types';
@@ -38,7 +39,7 @@ function keepRangeBoundaryTight(value: string): string {
     return `${withNonBreakingSpaces(start)}\u00A0– ${withNonBreakingSpaces(end)}`;
 }
 
-function getDaysLeftLabel(remainingDays: number, totalDays: number, lang: string, t: (key: string, options?: any) => string): string {
+function getDaysLeftLabel(remainingDays: number, totalDays: number, lang: string, t: TFunction): string {
     const upperLang = lang.toUpperCase();
 
     if (upperLang === 'RU') {
@@ -47,6 +48,10 @@ function getDaysLeftLabel(remainingDays: number, totalDays: number, lang: string
 
     if (upperLang === 'KA') {
         return `დარჩა ${remainingDays}\u00A0${t('days', { count: remainingDays })} ${totalDays}-დან`;
+    }
+
+    if (upperLang === 'UK') {
+        return `Залишилося ${remainingDays}\u00A0${t('days', { count: remainingDays })}\u00A0із\u00A0${totalDays}`;
     }
 
     return `${remainingDays}\u00A0${t('days', { count: remainingDays })} left out of ${totalDays}`;
