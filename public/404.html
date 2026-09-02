@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script>
       (function () {
-        var basePath = '/' + location.pathname.split('/')[1] + '/';
-        var publicPath = location.pathname.slice(basePath.length - 1) + location.search + location.hash;
-        location.replace(basePath + '?__public_path=' + encodeURIComponent(publicPath));
+        var publicPath = location.pathname + location.search + location.hash;
+        location.replace('/?__public_path=' + encodeURIComponent(publicPath));
       }());
     </script>
   </head>
