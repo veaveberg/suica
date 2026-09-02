@@ -495,6 +495,7 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
       const visibleCells = container.querySelectorAll<HTMLElement>('[data-year]');
       let visibleStart: string | null = null;
       let visibleEnd: string | null = null;
+      const monthVisibility = new Map<string, number>();
 
       visibleCells.forEach(cell => {
         const rect = cell.getBoundingClientRect();
@@ -503,6 +504,8 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
           if (date) {
             if (!visibleStart || date < visibleStart) visibleStart = date;
             if (!visibleEnd || date > visibleEnd) visibleEnd = date;
+            const visibleHeight = Math.max(0, Math.min(rect.bottom, containerRect.bottom) - Math.max(rect.top, containerRect.top));
+            monthVisibility.set(date.slice(0, 7), (monthVisibility.get(date.slice(0, 7)) || 0) + visibleHeight * rect.width);
           }
         }
       });
@@ -512,7 +515,8 @@ export const CalendarView: React.FC<CalendarViewProps> = React.memo(({
       }
 
       if (onPeriodChange) {
-        const visibleDate = visibleStart ? new Date(`${visibleStart}T12:00:00`) : new Date();
+        const dominantMonth = [...monthVisibility.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+        const visibleDate = dominantMonth ? new Date(`${dominantMonth}-15T12:00:00`) : visibleStart ? new Date(`${visibleStart}T12:00:00`) : new Date();
         onPeriodChange(format(visibleDate, 'LLLL yyyy', { locale: currentLocale }));
       }
     };

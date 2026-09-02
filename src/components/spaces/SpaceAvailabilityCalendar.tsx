@@ -219,16 +219,27 @@ export function SpaceAvailabilityCalendar({ content = 'availability', days, even
         if (!container) return;
         const update = () => {
             const current = container.querySelector<HTMLElement>('[data-space-today="true"]');
-            if (!current) return;
-            const currentRect = current.getBoundingClientRect();
             const containerRect = container.getBoundingClientRect();
-            const visible = currentRect.top >= containerRect.top && currentRect.bottom <= containerRect.bottom;
-            setMonthToday(previous => visible ? { ...previous, visible: false } : { direction: currentRect.top < containerRect.top ? 'up' : 'down', visible: true });
+            if (current) {
+                const currentRect = current.getBoundingClientRect();
+                const visible = currentRect.top >= containerRect.top && currentRect.bottom <= containerRect.bottom;
+                setMonthToday(previous => visible ? { ...previous, visible: false } : { direction: currentRect.top < containerRect.top ? 'up' : 'down', visible: true });
+            }
+            const monthVisibility = new Map<string, number>();
+            container.querySelectorAll<HTMLElement>('[data-space-date]').forEach(cell => {
+                const rect = cell.getBoundingClientRect();
+                const visibleHeight = Math.max(0, Math.min(rect.bottom, containerRect.bottom) - Math.max(rect.top, containerRect.top + 32));
+                if (visibleHeight === 0) return;
+                const period = format(new Date(`${cell.dataset.spaceDate}T12:00:00`), 'LLLL yyyy', { locale });
+                monthVisibility.set(period, (monthVisibility.get(period) ?? 0) + visibleHeight * rect.width);
+            });
+            const period = [...monthVisibility.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+            if (period) onPeriodChange?.(period);
         };
         container.addEventListener('scroll', update, { passive: true });
         update();
         return () => container.removeEventListener('scroll', update);
-    }, [mode]);
+    }, [mode, onPeriodChange]);
 
     useEffect(() => {
         if (mode !== 'week') return;
@@ -269,7 +280,7 @@ export function SpaceAvailabilityCalendar({ content = 'availability', days, even
                     const firstOfMonth = day.getDate() === 1;
                     const isToday = key === todayKey;
                     const height = range ? (range.end - range.start) * MONTH_PIXELS_PER_MINUTE : 0;
-                    return <div key={key} data-space-today={isToday || undefined} className={cn('bg-white p-1 dark:bg-zinc-900', dayIndex !== 6 && 'border-r border-gray-200 dark:border-zinc-800')} style={{ boxShadow: firstOfMonth ? 'inset 0 2px 0 rgb(113 113 122)' : undefined }}><div className="h-[50px]">{firstOfMonth && <div className="text-sm font-black uppercase leading-tight dark:text-white">{format(day, 'MMM', { locale })}</div>}<div className={cn('mb-1 text-xs font-bold', isToday ? 'flex h-7 w-7 items-center justify-center rounded-full bg-ios-red text-white' : 'text-ios-gray')}>{format(day, 'd')}</div></div><div className="relative -mx-1" style={{ height }}>{range && hours.filter(hour => hour * 60 >= range.start && hour * 60 < range.end).map(hour => <div key={hour} aria-hidden="true" className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-gray-100/20 dark:border-zinc-800/30" style={{ top: (hour * 60 - range.start) * MONTH_PIXELS_PER_MINUTE }} />)}{range && (content === 'availability' ? (windowsByDate.get(key) ?? []).map(window => <MonthAvailabilityBlock key={window.start} window={window} range={range} timeZone={timeZone} />) : (monthEventsByDate.get(key) ?? []).map((placement, index) => <MonthEventBlock key={`${placement.event.start}-${placement.event.end}-${placement.event.title}-${index}`} placement={placement} range={range} eventColor={eventColor} timeZone={timeZone} />))}</div></div>;
+                    return <div key={key} data-space-date={key} data-space-today={isToday || undefined} className={cn('bg-white p-1 dark:bg-zinc-900', dayIndex !== 6 && 'border-r border-gray-200 dark:border-zinc-800')} style={{ boxShadow: firstOfMonth ? 'inset 0 2px 0 rgb(113 113 122)' : undefined }}><div className="h-[50px]">{firstOfMonth && <div className="text-sm font-black uppercase leading-tight dark:text-white">{format(day, 'MMM', { locale })}</div>}<div className={cn('mb-1 text-xs font-bold', isToday ? 'flex h-7 w-7 items-center justify-center rounded-full bg-ios-red text-white' : 'text-ios-gray')}>{format(day, 'd')}</div></div><div className="relative -mx-1" style={{ height }}>{range && hours.filter(hour => hour * 60 >= range.start && hour * 60 < range.end).map(hour => <div key={hour} aria-hidden="true" className="pointer-events-none absolute left-0 right-0 z-[5] border-t border-gray-100/20 dark:border-zinc-800/30" style={{ top: (hour * 60 - range.start) * MONTH_PIXELS_PER_MINUTE }} />)}{range && (content === 'availability' ? (windowsByDate.get(key) ?? []).map(window => <MonthAvailabilityBlock key={window.start} window={window} range={range} timeZone={timeZone} />) : (monthEventsByDate.get(key) ?? []).map((placement, index) => <MonthEventBlock key={`${placement.event.start}-${placement.event.end}-${placement.event.title}-${index}`} placement={placement} range={range} eventColor={eventColor} timeZone={timeZone} />))}</div></div>;
                 })}</div>;
             })}</div>
             <div className="flex justify-center p-8"><button type="button" onClick={() => setWeekCount(value => value + 52)} className="rounded-2xl border border-gray-200 bg-ios-card px-7 py-3 font-semibold text-ios-blue dark:border-zinc-800 dark:bg-zinc-900">{t('load_more')}</button></div>
