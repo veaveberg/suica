@@ -5,8 +5,8 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), basicSsl()],
-  // Change 'suica' to your GitHub repo name for GH Pages
-  base: process.env.NODE_ENV === 'production' ? '/suica/' : '/',
+  // GitHub Pages maps the configured custom domain to this app's root.
+  base: '/',
   server: {
     https: {},
     host: true, // Allow access from mobile devices on same network
@@ -18,4 +18,3 @@ export default defineConfig({
     }
   },
 })
-
