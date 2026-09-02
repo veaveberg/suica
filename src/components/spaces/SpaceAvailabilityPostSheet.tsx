@@ -4,6 +4,7 @@ import type { TFunction } from 'i18next';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AvailabilityDay, WorkingHours } from '../../space-types';
+import type { Language } from '../../types';
 import { formatTimeRange, getLocale } from '../../utils/formatting';
 import { todayInTimeZone } from './spaceCalendarModel';
 
@@ -15,6 +16,13 @@ interface Props {
 }
 
 const WEEKDAY_KEYS: (keyof WorkingHours)[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const POST_LANGUAGES: { value: Language; label: string }[] = [
+    { value: 'EN', label: 'English' },
+    { value: 'UK', label: 'Українська' },
+    { value: 'RU', label: 'Русский' },
+    { value: 'KA', label: 'ქართული' },
+];
+const GEORGIAN_WEEKDAYS = ['კვირა', 'ორშაბათი', 'სამშაბათი', 'ოთხშაბათი', 'ხუთშაბათი', 'პარასკევი', 'შაბათი'];
 
 function timeInTimeZone(timestamp: number, timeZone: string): string {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(timestamp));
@@ -22,8 +30,26 @@ function timeInTimeZone(timestamp: number, timeZone: string): string {
     return `${values.hour}:${values.minute}`;
 }
 
-function formatDay(date: Date, locale: string): string {
-    return new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric' }).format(date);
+function englishOrdinal(day: number): string {
+    const suffix = day % 100 >= 11 && day % 100 <= 13
+        ? 'th'
+        : day % 10 === 1
+            ? 'st'
+            : day % 10 === 2
+                ? 'nd'
+                : day % 10 === 3
+                    ? 'rd'
+                    : 'th';
+    return `${day}${suffix}`;
+}
+
+function formatDay(date: Date, language: Language): string {
+    if (language === 'KA') return `${GEORGIAN_WEEKDAYS[date.getDay()]}, მე${date.getDate()}`;
+    const parts = new Intl.DateTimeFormat(getLocale(language), { weekday: 'long', day: 'numeric' }).formatToParts(date);
+    const weekday = parts.find(part => part.type === 'weekday')?.value ?? '';
+    const day = Number(parts.find(part => part.type === 'day')?.value ?? date.getDate());
+    if (language === 'EN') return `${weekday}, ${englishOrdinal(day)}`;
+    return `${weekday}, ${day}е`;
 }
 
 function formatWeekRange(start: Date, end: Date): string {
@@ -55,7 +81,7 @@ function windowsCoverWorkingHours({ day, timeZone, windows, workingHours }: { da
     return false;
 }
 
-function createPost({ days, locale, onlyFuture, t, timeZone, weekOffset, workingHours }: { days: AvailabilityDay[]; locale: string; onlyFuture: boolean; t: TFunction; timeZone: string; weekOffset: number; workingHours: WorkingHours }): string {
+function createPost({ days, language, onlyFuture, t, timeZone, weekOffset, workingHours }: { days: AvailabilityDay[]; language: Language; onlyFuture: boolean; t: TFunction; timeZone: string; weekOffset: number; workingHours: WorkingHours }): string {
     const weekStart = selectedWeekStart(timeZone, weekOffset);
     const now = Date.now();
     const availabilityByDate = new Map(days.map(day => [day.date, day.windows]));
@@ -64,7 +90,7 @@ function createPost({ days, locale, onlyFuture, t, timeZone, weekOffset, working
         const windows = (availabilityByDate.get(key) ?? []).flatMap(window => !onlyFuture || window.end > now ? [{ ...window, start: Math.max(window.start, now) }] : []);
         if (windows.length === 0) return [];
         const times = windowsCoverWorkingHours({ day, timeZone, windows, workingHours }) ? [t('all_day')] : windows.map(window => formatTimeRange(timeInTimeZone(window.start, timeZone), Math.round((window.end - window.start) / 60_000)));
-        return [`${formatDay(day, locale)}\n${times.join('\n')}`];
+        return [`${formatDay(day, language)}\n${times.join('\n')}`];
     });
     const intro = `${formatWeekRange(weekStart, addDays(weekStart, 6))}\n${t('space_post_heading')}\n${t('space_post_booking')}`;
     return daySections.length > 0 ? `${intro}\n\n${daySections.join('\n\n')}` : `${intro}\n\n${t('space_post_empty')}`;
@@ -75,8 +101,8 @@ export function SpaceAvailabilityPostSheet({ days, onClose, timeZone, workingHou
     const dialogRef = useRef<HTMLDialogElement>(null);
     const [weekOffset, setWeekOffset] = useState(0);
     const [onlyFuture, setOnlyFuture] = useState(true);
-    const locale = getLocale(i18n.language);
-    const [draft, setDraft] = useState(() => createPost({ days, locale, onlyFuture: true, t, timeZone, weekOffset: 0, workingHours }));
+    const [postLanguage, setPostLanguage] = useState<Language>('EN');
+    const [draft, setDraft] = useState(() => createPost({ days, language: 'EN', onlyFuture: true, t: i18n.getFixedT('EN'), timeZone, weekOffset: 0, workingHours }));
     const [copied, setCopied] = useState(false);
     const weekStart = useMemo(() => selectedWeekStart(timeZone, weekOffset), [timeZone, weekOffset]);
 
@@ -92,11 +118,15 @@ export function SpaceAvailabilityPostSheet({ days, onClose, timeZone, workingHou
     };
     const changeWeek = (nextOffset: number) => {
         setWeekOffset(nextOffset);
-        setDraft(createPost({ days, locale, onlyFuture, t, timeZone, weekOffset: nextOffset, workingHours }));
+        setDraft(createPost({ days, language: postLanguage, onlyFuture, t: i18n.getFixedT(postLanguage), timeZone, weekOffset: nextOffset, workingHours }));
     };
     const changeOnlyFuture = (nextOnlyFuture: boolean) => {
         setOnlyFuture(nextOnlyFuture);
-        setDraft(createPost({ days, locale, onlyFuture: nextOnlyFuture, t, timeZone, weekOffset, workingHours }));
+        setDraft(createPost({ days, language: postLanguage, onlyFuture: nextOnlyFuture, t: i18n.getFixedT(postLanguage), timeZone, weekOffset, workingHours }));
+    };
+    const changePostLanguage = (nextLanguage: Language) => {
+        setPostLanguage(nextLanguage);
+        setDraft(createPost({ days, language: nextLanguage, onlyFuture, t: i18n.getFixedT(nextLanguage), timeZone, weekOffset, workingHours }));
     };
     const weekLabel = `${weekOffset === 0 ? `${t('current_week')} ` : ''}${formatWeekRange(weekStart, addDays(weekStart, 6))}`;
 
@@ -107,6 +137,7 @@ export function SpaceAvailabilityPostSheet({ days, onClose, timeZone, workingHou
         </div>
         <div className="mx-auto mt-4 grid w-64 grid-cols-[2rem_1fr_2rem] items-center text-xs font-medium text-ios-gray"><button type="button" onClick={() => changeWeek(weekOffset - 1)} aria-label={t('previous_week')} className="justify-self-center rounded-lg p-1.5 active:bg-ios-background dark:active:bg-zinc-800"><ArrowLeft size={15} /></button><span className="truncate text-center">{weekLabel}</span><button type="button" onClick={() => changeWeek(weekOffset + 1)} aria-label={t('next_week_action')} className="justify-self-center rounded-lg p-1.5 active:bg-ios-background dark:active:bg-zinc-800"><ArrowRight size={15} /></button></div>
         <label className="mt-4 flex items-center gap-2 text-sm text-ios-gray"><input type="checkbox" checked={onlyFuture} onChange={event => changeOnlyFuture(event.target.checked)} className="h-4 w-4 accent-ios-blue" />{t('space_post_only_future')}</label>
+        <label className="mt-4 flex items-center justify-between gap-3 text-sm text-ios-gray">{t('space_post_language')}<select value={postLanguage} onChange={event => { const nextLanguage = POST_LANGUAGES.find(language => language.value === event.target.value)?.value; if (nextLanguage) changePostLanguage(nextLanguage); }} className="rounded-lg border border-gray-200 bg-ios-background px-2.5 py-1.5 text-sm text-zinc-900 outline-none focus:border-ios-blue dark:border-zinc-700 dark:bg-zinc-800 dark:text-white">{POST_LANGUAGES.map(language => <option key={language.value} value={language.value}>{language.label}</option>)}</select></label>
         <textarea value={draft} onChange={event => setDraft(event.target.value)} aria-label={t('space_post_title')} rows={16} className="mt-5 w-full resize-y rounded-xl border border-gray-200 bg-ios-background p-3 font-mono text-sm leading-6 text-zinc-900 outline-none focus:border-ios-blue dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" />
         <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-xl px-4 py-2 text-sm text-ios-gray">{t('close')}</button><button type="button" onClick={() => void copy()} className="inline-flex items-center gap-2 rounded-xl bg-ios-blue px-4 py-2 text-sm font-semibold text-white"><Copy size={16} />{copied ? t('copied') : t('copy_text')}</button></div>
     </dialog>;

@@ -32,6 +32,12 @@ interface TeacherAppProps {
     onChangeLanguage: (lang: Language) => void;
 }
 
+function CalendarPeriodTitle({ fallback, period }: { fallback: string | undefined; period: string }) {
+    const match = period.match(/^(.*?)(\d{4})$/);
+    if (!match) return <span className="truncate text-xl font-bold dark:text-white">{period || fallback}</span>;
+    return <><span className="truncate text-xl font-bold dark:text-white">{match[1].trim()}</span><span className="shrink-0 text-xl font-normal text-ios-gray">{match[2]}</span></>;
+}
+
 
 export const TeacherApp: React.FC<TeacherAppProps> = ({
     isDark,
@@ -130,8 +136,8 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                 style={{ paddingTop: 'max(1rem, var(--safe-area-inset-top))' }}
             >
                 {activeTab === 'calendar' && managedSpaces.length > 0
-                    ? <div className="flex min-w-0 items-center gap-2"><span className="truncate text-xl font-bold dark:text-white">{calendarPeriodDisplay}</span><CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setCalendarPeriodDisplay(''); setParam('calendar', value); }} />{calendarSource.kind === 'space' && <button type="button" onClick={() => setIsEditingSpaceHours(true)} aria-label={t('space_edit_hours')} className="shrink-0 rounded-lg p-2 text-ios-gray active:bg-black/5 dark:active:bg-white/10"><Pencil className="h-4 w-4" /></button>}</div>
-                    : <h1 className="text-xl font-bold dark:text-white">{activeTab === 'calendar' && calendarPeriodDisplay ? calendarPeriodDisplay : tabs.find(t => t.id === activeTab)?.label}</h1>}
+                    ? <div className="flex min-w-0 items-center gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /><CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} />{calendarSource.kind === 'space' && <button type="button" onClick={() => setIsEditingSpaceHours(true)} aria-label={t('space_edit_hours')} className="shrink-0 rounded-lg p-2 text-ios-gray active:bg-black/5 dark:active:bg-white/10"><Pencil className="h-4 w-4" /></button>}</div>
+                    : <h1 className="flex min-w-0 items-center gap-2"><CalendarPeriodTitle fallback={tabs.find(t => t.id === activeTab)?.label} period={activeTab === 'calendar' ? calendarPeriodDisplay : ''} /></h1>}
                 <div className="flex items-center gap-2">
                     {activeTab === 'calendar' && calendarSource.kind === 'space' && (
                         <>

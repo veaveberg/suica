@@ -252,8 +252,13 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
     return events;
 }
 
-// CORS proxies to try (in order)
-const CORS_PROXIES = [
+// Try a direct request first: several calendar publishers (including some iCloud
+// feeds) permit it, which avoids depending on a third-party proxy. The remaining
+// options run concurrently because an unavailable proxy must not delay the
+// calendar while the next one is tried.
+const CALENDAR_FETCH_TIMEOUT_MS = 6_000;
+const CALENDAR_FETCH_SOURCES = [
+    (url: string) => url,
     (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
     (url: string) => `https://proxy.cors.sh/${url}`,
@@ -279,37 +284,42 @@ export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise
     }
 
     const fetchPromise = (async () => {
-        // Try each CORS proxy until one works
-        for (const makeProxyUrl of CORS_PROXIES) {
-            try {
-                const proxyUrl = makeProxyUrl(cacheBusterUrl);
-                const response = await fetch(proxyUrl, {
-                    headers: {
-                        'Accept': 'text/calendar, text/plain, */*',
-                    }
-                });
+        const abortController = new AbortController();
+        const timeoutId = window.setTimeout(() => abortController.abort(), CALENDAR_FETCH_TIMEOUT_MS);
 
-                if (!response.ok) {
-                    console.warn(`ical: Proxy failed for ${calendar.name} (${response.status}), trying next...`);
-                    continue;
+        try {
+            const events = await new Promise<ExternalEvent[] | null>(resolve => {
+                let remainingRequests = CALENDAR_FETCH_SOURCES.length;
+
+                for (const makeSourceUrl of CALENDAR_FETCH_SOURCES) {
+                    void fetch(makeSourceUrl(cacheBusterUrl), {
+                        headers: { 'Accept': 'text/calendar, text/plain, */*' },
+                        signal: abortController.signal,
+                    })
+                        .then(async response => {
+                            if (!response.ok) return null;
+                            const icsContent = await response.text();
+                            if (!icsContent.includes('BEGIN:VCALENDAR')) return null;
+                            return parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
+                        })
+                        .catch(() => null)
+                        .then(eventsFromSource => {
+                            if (eventsFromSource !== null) {
+                                abortController.abort();
+                                resolve(eventsFromSource);
+                                return;
+                            }
+
+                            remainingRequests -= 1;
+                            if (remainingRequests === 0) resolve(null);
+                        });
                 }
+            });
 
-                const icsContent = await response.text();
-
-                // Check if it's actually iCal content
-                if (!icsContent.includes('BEGIN:VCALENDAR')) {
-                    console.warn(`ical: Invalid iCal content for ${calendar.name} from proxy, trying next...`);
-                    continue;
-                }
-
-                const events = parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
-                return events;
-            } catch (error) {
-                // Network error or CORS block, try next proxy
-                continue;
-            }
+            return events;
+        } finally {
+            window.clearTimeout(timeoutId);
         }
-        return null;
     })();
 
     pendingFetches.set(cacheBusterUrl, fetchPromise);
