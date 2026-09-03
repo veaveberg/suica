@@ -12,6 +12,8 @@ export const getSyncTarget = internalQuery({
             minimumAvailabilityMinutes: space.minimumAvailabilityMinutes,
             timeZone: space.timeZone,
             workingHours: space.workingHours,
+            activeRevision: space.activeRevision,
+            availabilitySnapshotHash: space.availabilitySnapshotHash,
         };
     },
 });
@@ -50,10 +52,27 @@ export const writeEventsBatch = internalMutation({
 });
 
 export const activateRevision = internalMutation({
-    args: { spaceId: v.id("spaces"), revision: v.string(), startDate: v.string(), endDate: v.string() },
+    args: { spaceId: v.id("spaces"), revision: v.string(), snapshotHash: v.string(), startDate: v.string(), endDate: v.string() },
     handler: async (ctx, args) => {
         await ctx.db.patch(args.spaceId, {
             activeRevision: args.revision,
+            availabilitySnapshotHash: args.snapshotHash,
+            availabilityStartDate: args.startDate,
+            availabilityEndDate: args.endDate,
+            syncState: "ready",
+            lastSyncedAt: Date.now(),
+            lastSyncError: undefined,
+        });
+    },
+});
+
+// A calendar poll that produces the same availability does not need a new
+// revision. Keeping the existing revision avoids rewriting and then deleting
+// the entire availability horizon on every poll.
+export const completeUnchangedSync = internalMutation({
+    args: { spaceId: v.id("spaces"), startDate: v.string(), endDate: v.string() },
+    handler: async (ctx, args) => {
+        await ctx.db.patch(args.spaceId, {
             availabilityStartDate: args.startDate,
             availabilityEndDate: args.endDate,
             syncState: "ready",

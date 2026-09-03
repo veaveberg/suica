@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
-import { addDaysToDateKey, addMonthsToDateKey, countDateKeysInclusive, dateKeyInTimeZone, isWorkingHours, localMinuteToEpochMs } from "./spaceAvailability";
+import { addDaysToDateKey, addMonthsToDateKey, countDateKeysInclusive, dateKeyInTimeZone, isWorkingHours } from "./spaceAvailability";
 import { workingHoursValidator } from "./spaceValidators";
 import { getUser } from "./permissions";
 
@@ -33,17 +33,6 @@ function summary(space: Doc<"spaces">) {
         lastSyncedAt: space.lastSyncedAt,
         status: space.status,
     };
-}
-
-function nextPublicAvailabilityStart(now: number, timeZone: string): number {
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(now));
-    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    const minute = Number(values.hour) * 60 + Number(values.minute);
-    const roundedMinute = Math.ceil(minute / 30) * 30;
-    const date = dateKeyInTimeZone(new Date(now), timeZone);
-    return roundedMinute === 24 * 60
-        ? localMinuteToEpochMs(addDaysToDateKey(date, 1), 0, timeZone)
-        : localMinuteToEpochMs(date, roundedMinute, timeZone);
 }
 
 async function loadAvailability(ctx: QueryCtx, space: Doc<"spaces">, startDate: string, endDate: string, includeEvents = false, minimumWindowStart?: number) {
@@ -148,9 +137,10 @@ export const getPublicAvailability = query({
         if (!space || space.status !== "active") return null;
         const now = Date.now();
         const today = dateKeyInTimeZone(new Date(now), space.timeZone);
+        const publicStartDate = addDaysToDateKey(today, -7);
         const publicEndDate = addMonthsToDateKey(today, 2);
-        if (args.endDate < today || args.startDate > publicEndDate) return null;
-        return await loadAvailability(ctx, space, args.startDate < today ? today : args.startDate, args.endDate > publicEndDate ? publicEndDate : args.endDate, false, nextPublicAvailabilityStart(now, space.timeZone));
+        if (args.endDate < publicStartDate || args.startDate > publicEndDate) return null;
+        return await loadAvailability(ctx, space, args.startDate < publicStartDate ? publicStartDate : args.startDate, args.endDate > publicEndDate ? publicEndDate : args.endDate);
     },
 });
 

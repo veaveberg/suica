@@ -22,7 +22,7 @@ function isThemeMode(value: string | null): value is SpaceThemeMode {
 function CalendarPeriodTitle({ period }: { period: string }) {
     const match = period.match(/^(.*?)(\d{4})$/);
     if (!match) return null;
-    return <div className="flex items-baseline gap-2 leading-tight"><span className="text-lg font-bold dark:text-white">{match[1].trim()}</span><span className="text-lg font-normal text-ios-gray">{match[2]}</span></div>;
+    return <div className="flex items-baseline gap-2 leading-tight"><span className="text-lg font-bold capitalize dark:text-white">{match[1].trim()}</span><span className="text-lg font-normal text-ios-gray">{match[2]}</span></div>;
 }
 
 function PublicLanguageDropdown() {

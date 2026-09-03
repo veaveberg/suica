@@ -36,7 +36,7 @@ export function CalendarSourceDropdown({ onChange, selected, spaces }: Props) {
     };
 
     return <details ref={detailsRef} className="relative">
-        <summary className="list-none cursor-pointer rounded-xl px-2 py-1.5 active:bg-black/5 dark:active:bg-white/10 [&::-webkit-details-marker]:hidden">
+        <summary className="list-none cursor-pointer rounded-xl py-1.5 active:bg-black/5 dark:active:bg-white/10 [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-2">
                 {selected.kind === 'groups'
                     ? <><Layers className="h-5 w-5 text-ios-blue" /><span className="text-xl font-bold dark:text-white">{t('groups')}</span></>

@@ -4,7 +4,7 @@ import ical, { type VEvent } from "node-ical";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
-import { addDaysToDateKey, calculateAvailability, dateKeyInTimeZone, type BusyInterval } from "./spaceAvailability";
+import { addDaysToDateKey, calculateAvailability, dateKeyInTimeZone, type AvailabilityDay, type BusyInterval } from "./spaceAvailability";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -12,6 +12,14 @@ const SYNC_PAST_DAYS = 31;
 const SYNC_FUTURE_DAYS = 400;
 const WRITE_BATCH_SIZE = 40;
 const MINIMUM_AVAILABILITY_MINUTES = 60;
+
+type CalendarEvent = { start: number; end: number; title: string; allDay: boolean };
+
+async function availabilitySnapshotHash(days: readonly AvailabilityDay[], events: readonly CalendarEvent[]): Promise<string> {
+    const bytes = new TextEncoder().encode(JSON.stringify({ days, events }));
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
 
 function calendarUrlFromEnvironment(environmentKey: string): string {
     const value = process.env[environmentKey];
@@ -25,7 +33,7 @@ function isBusyEvent(event: VEvent): boolean {
     return event.status !== "CANCELLED" && event.transparency !== "TRANSPARENT";
 }
 
-async function fetchBusyIntervals(url: string, from: Date, to: Date): Promise<{ intervals: BusyInterval[]; events: { start: number; end: number; title: string; allDay: boolean }[] }> {
+async function fetchBusyIntervals(url: string, from: Date, to: Date): Promise<{ intervals: BusyInterval[]; events: CalendarEvent[] }> {
     const response = await fetch(url, {
         headers: { Accept: "text/calendar" },
         signal: AbortSignal.timeout(15_000),
@@ -35,7 +43,7 @@ async function fetchBusyIntervals(url: string, from: Date, to: Date): Promise<{ 
     if (!body.includes("BEGIN:VCALENDAR")) throw new Error("Calendar response is invalid");
     const calendar = await ical.async.parseICS(body);
     const intervals: BusyInterval[] = [];
-    const eventsByKey = new Map<string, { start: number; end: number; title: string; allDay: boolean }>();
+    const eventsByKey = new Map<string, CalendarEvent>();
     for (const component of Object.values(calendar)) {
         if (!component || component.type !== "VEVENT" || !isBusyEvent(component)) continue;
         const instances = ical.expandRecurringEvent(component, { from, to, expandOngoing: true });
@@ -50,7 +58,8 @@ async function fetchBusyIntervals(url: string, from: Date, to: Date): Promise<{ 
             }
         }
     }
-    return { intervals, events: [...eventsByKey.values()] };
+    const events = [...eventsByKey.values()].sort((left, right) => left.start - right.start || left.end - right.end || left.title.localeCompare(right.title));
+    return { intervals, events };
 }
 
 export const syncSpace = internalAction({
@@ -74,6 +83,15 @@ export const syncSpace = internalAction({
                 timeZone: target.timeZone,
                 workingHours: target.workingHours,
             });
+            const snapshotHash = await availabilitySnapshotHash(days, events);
+            if (target.activeRevision && target.availabilitySnapshotHash === snapshotHash) {
+                await ctx.runMutation(internal.spacesInternal.completeUnchangedSync, {
+                    spaceId: target.id,
+                    startDate,
+                    endDate,
+                });
+                return;
+            }
             const revision = crypto.randomUUID();
             for (let index = 0; index < days.length; index += WRITE_BATCH_SIZE) {
                 await ctx.runMutation(internal.spacesInternal.writeAvailabilityBatch, {
@@ -85,7 +103,13 @@ export const syncSpace = internalAction({
             for (let index = 0; index < events.length; index += WRITE_BATCH_SIZE) {
                 await ctx.runMutation(internal.spacesInternal.writeEventsBatch, { spaceId: target.id, revision, events: events.slice(index, index + WRITE_BATCH_SIZE) });
             }
-            await ctx.runMutation(internal.spacesInternal.activateRevision, { spaceId: target.id, revision, startDate, endDate });
+            await ctx.runMutation(internal.spacesInternal.activateRevision, {
+                spaceId: target.id,
+                revision,
+                snapshotHash,
+                startDate,
+                endDate,
+            });
             let deletedCount: number;
             do {
                 deletedCount = await ctx.runMutation(internal.spacesInternal.deleteOldAvailabilityBatch, {

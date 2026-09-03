@@ -35,7 +35,7 @@ interface TeacherAppProps {
 function CalendarPeriodTitle({ fallback, period }: { fallback: string | undefined; period: string }) {
     const match = period.match(/^(.*?)(\d{4})$/);
     if (!match) return <span className="truncate text-xl font-bold dark:text-white">{period || fallback}</span>;
-    return <><span className="truncate text-xl font-bold dark:text-white">{match[1].trim()}</span><span className="shrink-0 text-xl font-normal text-ios-gray">{match[2]}</span></>;
+    return <><span className="truncate text-xl font-bold capitalize dark:text-white">{match[1].trim()}</span><span className="shrink-0 text-xl font-normal text-ios-gray">{match[2]}</span></>;
 }
 
 

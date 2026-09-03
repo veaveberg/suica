@@ -160,6 +160,7 @@ export default defineSchema({
         workingHours: workingHoursValidator,
         syncState: v.union(v.literal("pending"), v.literal("syncing"), v.literal("ready"), v.literal("error")),
         activeRevision: v.optional(v.string()),
+        availabilitySnapshotHash: v.optional(v.string()),
         lastSyncedAt: v.optional(v.number()),
         availabilityStartDate: v.optional(v.string()),
         availabilityEndDate: v.optional(v.string()),
