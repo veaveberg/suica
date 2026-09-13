@@ -11,7 +11,7 @@ import { SpaceAvailabilityPostSheet } from './SpaceAvailabilityPostSheet';
 import { sourceCalendarRange, type SpaceCalendarMode } from './spaceCalendarModel';
 import type { SpaceCalendarDisplay } from './SpaceViewDropdown';
 
-export const ManagedSpaceCalendar = memo(function ManagedSpaceCalendar({ onPeriodChange, space }: { onPeriodChange: (period: string) => void; space: ManagedSpace }) {
+export const ManagedSpaceCalendar = memo(function ManagedSpaceCalendar({ onPeriodChange, showNowLine, space }: { onPeriodChange: (period: string) => void; showNowLine: boolean; space: ManagedSpace }) {
     const { t } = useTranslation();
     const viewParam = useParam('view');
     const displayParam = useParam('display');
@@ -34,6 +34,6 @@ export const ManagedSpaceCalendar = memo(function ManagedSpaceCalendar({ onPerio
         {result === undefined && <div className="flex flex-1 items-center justify-center text-sm text-ios-gray">{t('loading')}…</div>}
         {result === null && <div className="flex flex-1 items-center justify-center text-sm text-ios-gray">{t('space_calendar_unavailable')}</div>}
         {result?.kind === 'unavailable' && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-ios-gray">{t('space_calendar_unavailable')}</div>}
-        {result?.kind === 'ready' && <div className="min-h-0 flex-1"><SpaceAvailabilityCalendar content={display} days={result.days} events={result.events ?? []} eventColor={space.color} mode={mode} onModeChange={changeMode} onPeriodChange={onPeriodChange} timeZone={space.timeZone} workingHours={space.workingHours} showToolbar={false} />{sheetParam === 'space-post' && <SpaceAvailabilityPostSheet days={result.days} timeZone={space.timeZone} workingHours={space.workingHours} onClose={() => setParams({ sheet: null })} />}</div>}
+        {result?.kind === 'ready' && <div className="min-h-0 flex-1"><SpaceAvailabilityCalendar content={display} days={result.days} events={result.events ?? []} eventColor={space.color} mode={mode} onModeChange={changeMode} onPeriodChange={onPeriodChange} showNowLine={showNowLine} timeZone={space.timeZone} workingHours={space.workingHours} showToolbar={false} />{sheetParam === 'space-post' && <SpaceAvailabilityPostSheet days={result.days} timeZone={space.timeZone} workingHours={space.workingHours} onClose={() => setParams({ sheet: null })} />}</div>}
     </div>;
 });

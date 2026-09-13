@@ -107,6 +107,12 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
     const calendarSource: CalendarSource = selectedSpace ? { kind: 'space', space: selectedSpace } : { kind: 'groups' }
     const spaceCalendarMode = useParam('view') === 'month' ? 'month' : 'week'
     const spaceCalendarDisplay: SpaceCalendarDisplay = useParam('display') === 'events' ? 'events' : 'availability'
+    const [showSpaceNowLine, setShowSpaceNowLine] = useState(() => window.localStorage.getItem('suica:space-calendar:show-now-line') !== 'hidden')
+
+    const changeShowSpaceNowLine = (show: boolean) => {
+        window.localStorage.setItem('suica:space-calendar:show-now-line', show ? 'visible' : 'hidden')
+        setShowSpaceNowLine(show)
+    }
 
     useEffect(() => {
         syncLessonsFromSchedule().then(() => refreshLessons());
@@ -140,7 +146,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                         <div className="flex min-w-0 items-center gap-2"><CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} /><button type="button" onClick={() => setIsEditingSpaceHours(true)} aria-label={t('space_edit_hours')} className="shrink-0 rounded-lg p-2 text-ios-gray active:bg-black/5 dark:active:bg-white/10"><Pencil className="h-4 w-4" /></button><SpaceShareDropdown space={calendarSource.space} onPreparePost={() => setParam('sheet', 'space-post')} /></div>
                         <div className="flex shrink-0 items-center gap-2"><button onClick={() => setShowSettings(true)} className="p-2 rounded-full bg-ios-background dark:bg-zinc-800 active:scale-95 transition-transform"><Settings className="w-5 h-5 text-ios-gray" /></button></div>
                     </div>
-                    <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-baseline gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /></div><SpaceViewDropdown mode={spaceCalendarMode} display={spaceCalendarDisplay} onModeChange={value => setParam('view', value)} onDisplayChange={value => setParam('display', value)} /></div>
+                    <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-baseline gap-2"><CalendarPeriodTitle fallback={t('calendar')} period={calendarPeriodDisplay} /></div><SpaceViewDropdown mode={spaceCalendarMode} display={spaceCalendarDisplay} onModeChange={value => setParam('view', value)} onDisplayChange={value => setParam('display', value)} showNowLine={showSpaceNowLine} onShowNowLineChange={changeShowSpaceNowLine} /></div>
                 </> : activeTab === 'calendar' && calendarSource.kind === 'groups' ? <>
                     <div className="flex min-w-0 items-center justify-between gap-2">
                         <CalendarSourceDropdown selected={calendarSource} spaces={managedSpaces} onChange={value => { setIsEditingSpaceHours(false); setParam('calendar', value); }} />
@@ -202,7 +208,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                             isActive={activeTab === 'calendar'}
                             isSelectionMode={isSelectionMode}
                             onSelectionModeChange={setIsSelectionMode}
-                        /> : <ManagedSpaceCalendar key={calendarSource.space.id} space={calendarSource.space} onPeriodChange={setCalendarPeriodDisplay} />}
+                    /> : <ManagedSpaceCalendar key={calendarSource.space.id} space={calendarSource.space} onPeriodChange={setCalendarPeriodDisplay} showNowLine={showSpaceNowLine} />}
                 </div>
 
                 <div className={cn("h-full overflow-y-auto overscroll-y-contain", activeTab !== 'passes' && "hidden")}>

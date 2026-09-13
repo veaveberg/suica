@@ -12,10 +12,12 @@ type Props = {
     display: SpaceCalendarDisplay;
     onModeChange: (mode: SpaceCalendarMode) => void;
     onDisplayChange: (display: SpaceCalendarDisplay) => void;
+    showNowLine?: boolean;
+    onShowNowLineChange?: (show: boolean) => void;
     showDisplayToggle?: boolean;
 } & ({ onThemeModeChange: (mode: SpaceThemeMode) => void; themeMode: SpaceThemeMode } | { onThemeModeChange?: never; themeMode?: never });
 
-export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange, onThemeModeChange, showDisplayToggle = true, themeMode }: Props) {
+export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange, showNowLine, onShowNowLineChange, onThemeModeChange, showDisplayToggle = true, themeMode }: Props) {
     const { t } = useTranslation();
     const detailsRef = useRef<HTMLDetailsElement>(null);
     useEffect(() => {
@@ -48,6 +50,10 @@ export function SpaceViewDropdown({ mode, display, onModeChange, onDisplayChange
             {showDisplayToggle && <div aria-label={t('availability')} className="mt-2 flex flex-col rounded-xl bg-ios-background p-1 dark:bg-zinc-800">
                 {(['availability', 'events'] as const).map(value => <button key={value} type="button" onClick={() => choose(() => onDisplayChange(value))} className={cn('rounded-lg px-2.5 py-2 text-left text-xs font-semibold', display === value ? 'bg-white text-ios-blue shadow-sm dark:bg-zinc-700' : 'text-ios-gray')}>{t(value)}</button>)}
             </div>}
+            {showNowLine !== undefined && onShowNowLineChange && <button type="button" aria-pressed={showNowLine} onClick={() => onShowNowLineChange(!showNowLine)} className="mt-2 flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-left text-xs font-semibold text-ios-gray hover:bg-ios-background dark:hover:bg-zinc-800">
+                <span className="flex-1">{t('red_line')}</span>
+                <span aria-hidden="true" className={cn('relative h-5 w-9 rounded-full transition-colors', showNowLine ? 'bg-ios-blue' : 'bg-gray-300 dark:bg-zinc-600')}><span className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform', showNowLine ? 'translate-x-4' : 'translate-x-0.5')} /></span>
+            </button>}
             {onThemeModeChange && themeMode && <div aria-label={t('theme')} className="mt-2 flex flex-col rounded-xl bg-ios-background p-1 dark:bg-zinc-800">
                 {(['auto', 'light', 'dark'] as const).map(value => <button key={value} type="button" onClick={() => choose(() => onThemeModeChange(value))} className={cn('rounded-lg px-2.5 py-2 text-left text-xs font-semibold', themeMode === value ? 'bg-white text-ios-blue shadow-sm dark:bg-zinc-700' : 'text-ios-gray')}>{t(value)}</button>)}
             </div>}
