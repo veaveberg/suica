@@ -1,17 +1,37 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { botLanguageValidator } from "./botValidators";
 import { workingHoursValidator } from "./spaceValidators";
 
 export default defineSchema({
+    bot_preferences: defineTable({
+        telegramId: v.string(),
+        language: botLanguageValidator,
+        lastUpdateId: v.number(),
+        lastTestUpdateId: v.optional(v.number()),
+        lastTestRequestedAt: v.optional(v.number()),
+    }).index("by_telegram", ["telegramId"]),
+
     users: defineTable({
         tokenIdentifier: v.string(),
         name: v.optional(v.string()),
         username: v.optional(v.string()),
+        telegramUsernameVerified: v.optional(v.boolean()),
         instagram_username: v.optional(v.string()), // Teacher's IG profile handle (e.g. for button in student view)
         role: v.union(v.literal("admin"), v.literal("teacher"), v.literal("student")),
         studentId: v.optional(v.id("students")),
     }).index("by_token", ["tokenIdentifier"])
         .index("by_username", ["username"]),
+
+    teacher_notifications: defineTable({
+        lessonId: v.id("lessons"),
+        userId: v.id("users"),
+        kind: v.literal("attendance_reminder"),
+        status: v.union(v.literal("sending"), v.literal("sent"), v.literal("failed"), v.literal("unknown"), v.literal("blocked")),
+        dueAt: v.optional(v.number()),
+        attemptedAt: v.number(),
+        attempts: v.number(),
+    }).index("by_lesson", ["lessonId"]),
 
     groups: defineTable({
         name: v.string(),
@@ -61,6 +81,8 @@ export default defineSchema({
     }).index("by_user", ["userId"]),
 
     lessons: defineTable({
+        reminderJobId: v.optional(v.id("_scheduled_functions")),
+        reminderDueAt: v.optional(v.number()),
         group_id: v.id("groups"),
         date: v.string(),
         time: v.string(),
@@ -75,7 +97,8 @@ export default defineSchema({
         userId: v.string(),
     })
         .index("by_user", ["userId"])
-        .index("by_group_date", ["group_id", "date"]),
+        .index("by_group_date", ["group_id", "date"])
+        .index("by_date", ["date"]),
 
     schedules: defineTable({
         group_id: v.id("groups"),

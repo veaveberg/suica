@@ -2,7 +2,10 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
+import { webhook } from "./bot";
+
 const http = httpRouter();
+http.route({ path: "/telegram/webhook", method: "POST", handler: webhook });
 
 http.route({
     path: "/calendar",

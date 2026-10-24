@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 
@@ -13,7 +12,29 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 // Middleware
-app.use(cors());
+app.disable('x-powered-by');
+// This is a local data utility, not an authenticated production API.
+app.use((req, res, next) => {
+    const hosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+    if (!hosts.has(req.hostname)) return res.status(403).json({ error: 'Local access only' });
+    const origin = req.get('origin');
+    if (origin) {
+        try {
+            const url = new URL(origin);
+            if (!hosts.has(url.hostname) || !['http:', 'https:'].includes(url.protocol)
+                || !['5173', '4173', '3001'].includes(url.port)) {
+                return res.status(403).json({ error: 'Untrusted origin' });
+            }
+        } catch {
+            return res.status(403).json({ error: 'Untrusted origin' });
+        }
+    } else if (req.get('sec-fetch-site') === 'cross-site') {
+        return res.status(403).json({ error: 'Untrusted origin' });
+    }
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Content-Type-Options', 'nosniff');
+    next();
+});
 app.use(express.json());
 
 // Helper to get data file path
@@ -157,7 +178,10 @@ app.get('/api/:table/query/:field/:value', (req, res) => {
     res.json(results);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`📦 Suica API Server running at http://localhost:${PORT}`);
-    console.log(`📁 Data stored in: ${DATA_DIR}`);
-});
+if (require.main === module) {
+    app.listen(PORT, '127.0.0.1', () => {
+        console.log(`Suica local API running at http://127.0.0.1:${PORT}`);
+    });
+}
+
+module.exports = app;

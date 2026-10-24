@@ -12,32 +12,12 @@ export type SessionClaims = {
     exp: number;
 };
 
-let didWarnMissingDedicatedSecret = false;
-
-function isProductionEnv(): boolean {
-    const nodeEnv = (process.env.NODE_ENV || "").toLowerCase();
-    const deployment = process.env.CONVEX_DEPLOYMENT || "";
-    return nodeEnv === "production" || deployment.startsWith("prod:");
-}
-
 function getSessionSecretOrThrow(): string {
-    const dedicated = process.env.SUICA_SESSION_SECRET;
-    if (dedicated) return dedicated;
-
-    if (isProductionEnv()) {
-        throw new Error("Missing SUICA_SESSION_SECRET in production");
+    const secret = process.env.SUICA_SESSION_SECRET;
+    if (!secret || secret.length < 32) {
+        throw new Error("SUICA_SESSION_SECRET must contain at least 32 characters");
     }
-
-    const fallback = process.env.TELEGRAM_BOT_TOKEN;
-    if (fallback) {
-        if (!didWarnMissingDedicatedSecret) {
-            didWarnMissingDedicatedSecret = true;
-            console.warn("[security] SUICA_SESSION_SECRET is not set; using TELEGRAM_BOT_TOKEN as fallback (non-production only).");
-        }
-        return fallback;
-    }
-
-    throw new Error("Session signing secret is not configured (set SUICA_SESSION_SECRET)");
+    return secret;
 }
 
 function toHex(bytes: Uint8Array): string {

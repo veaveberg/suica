@@ -49,7 +49,6 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
         // Define the global callback safely
         // ensuring we don't overwrite if it exists, or just overwrite to point to our ref
         window.onTelegramAuth = (user: TelegramUser) => {
-            console.log("[TelegramWidget] Global window.onTelegramAuth hit!", user);
             if (onAuthRef.current) {
                 onAuthRef.current(user);
             } else {

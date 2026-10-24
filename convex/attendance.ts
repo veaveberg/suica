@@ -2,7 +2,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { ensureOwnedRecord, ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 import { rateLimiter } from "./rateLimits";
 
 const attendanceStatus = v.union(
@@ -63,6 +63,8 @@ export const mark = mutation({
     handler: async (ctx, args) => {
         await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
+        await ensureOwnedRecord(ctx, user, args.lesson_id);
+        await ensureOwnedRecord(ctx, user, args.student_id);
 
         // check if exists
         const existing = await ctx.db
@@ -145,6 +147,10 @@ export const syncLessonAttendance = mutation({
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const lesson = await ctx.db.get(args.lesson_id);
         if (!lesson) throw new Error("Lesson not found");
+        await ensureOwnedRecord(ctx, user, args.lesson_id);
+        for (const desired of args.attendance) {
+            await ensureOwnedRecord(ctx, user, desired.student_id);
+        }
 
         const existingAttendance = await ctx.db
             .query("attendance")
@@ -227,6 +233,8 @@ export const bulkCreate = mutation({
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const record of args.attendance) {
+            await ensureOwnedRecord(ctx, user, record.lesson_id);
+            await ensureOwnedRecord(ctx, user, record.student_id);
             await ctx.db.insert("attendance", {
                 ...record,
                 userId: user.tokenIdentifier,

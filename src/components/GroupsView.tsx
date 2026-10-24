@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useData } from '../DataProvider';
 
-import { ChevronDown, ChevronRight, Archive, Instagram, Plus } from 'lucide-react';
-import { TelegramIcon } from './Icons';
+import { ChevronDown, ChevronRight, Archive, Plus } from 'lucide-react';
+import { Instagram, TelegramIcon } from './Icons';
 import { useTelegram } from './TelegramProvider';
 import type { Group } from '../types';
 import { GroupDetailSheet } from './GroupDetailSheet';

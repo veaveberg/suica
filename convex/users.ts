@@ -1,64 +1,12 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { getUser } from "./permissions";
 import { createSessionToken } from "./session";
-import { rateLimiter } from "./rateLimits";
-import type { Id } from "./_generated/dataModel";
+import { authenticateTelegram } from "./telegramAuth";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 
 declare const process: { env: { [key: string]: string | undefined } };
-
-const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60; // 24h
-
-function toHex(bytes: Uint8Array): string {
-    return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function sha256Bytes(input: string): Promise<Uint8Array> {
-    const data = new TextEncoder().encode(input);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    return new Uint8Array(digest);
-}
-
-async function hmacSha256Bytes(keyBytes: Uint8Array, payload: string): Promise<Uint8Array> {
-    const rawKey = keyBytes.buffer.slice(keyBytes.byteOffset, keyBytes.byteOffset + keyBytes.byteLength) as ArrayBuffer;
-    const key = await crypto.subtle.importKey(
-        "raw",
-        rawKey,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-    );
-    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload));
-    return new Uint8Array(signature);
-}
-
-function buildDataCheckString(entries: Array<[string, string]>): string {
-    return entries
-        .filter(([k, v]) => k !== "hash" && v !== undefined && v !== null && v !== "")
-        .map(([k, v]) => [k, String(v)] as [string, string])
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([k, v]) => `${k}=${v}`)
-        .join("\n");
-}
-
-function parseInitData(initData: string): Record<string, string> {
-    const params = new URLSearchParams(initData);
-    const out: Record<string, string> = {};
-    for (const [k, v] of params.entries()) out[k] = v;
-    return out;
-}
-
-function getAuthDateFromParsed(parsed: Record<string, string>): number | null {
-    const value = parsed.auth_date;
-    if (!value) return null;
-    const asNum = Number(value);
-    return Number.isFinite(asNum) ? asNum : null;
-}
-
-function isAuthFresh(authDateSeconds: number): boolean {
-    const now = Math.floor(Date.now() / 1000);
-    return authDateSeconds > 0 && now - authDateSeconds <= MAX_AUTH_AGE_SECONDS;
-}
 
 function safeEqual(a: string, b: string): boolean {
     if (a.length !== b.length) return false;
@@ -75,10 +23,10 @@ function createRandomToken(bytes = 32): string {
     return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-async function ensureCalendarExportTokenExists(ctx: any, userId: Id<"users">) {
+async function ensureCalendarExportTokenExists(ctx: MutationCtx, userId: Id<"users">) {
     const existing = await ctx.db
         .query("calendar_export_tokens")
-        .withIndex("by_user", (q: any) => q.eq("userId", userId))
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
     if (existing) return;
 
@@ -89,115 +37,37 @@ async function ensureCalendarExportTokenExists(ctx: any, userId: Id<"users">) {
     });
 }
 
-async function verifyWebAppInitData(initData: string, botToken: string): Promise<boolean> {
-    const parsed = parseInitData(initData);
-    if (!parsed.hash) return false;
+const loginArgs = {
+    initData: v.string(), // The raw query string from Telegram
+    userData: v.object({
+        id: v.number(),
+        first_name: v.string(),
+        last_name: v.optional(v.string()),
+        username: v.optional(v.string()),
+        photo_url: v.optional(v.string()),
+        auth_date: v.optional(v.number()),
+        hash: v.optional(v.string()),
+    }),
+};
 
-    const authDate = getAuthDateFromParsed(parsed);
-    if (!authDate || !isAuthFresh(authDate)) return false;
-
-    const dataCheckString = buildDataCheckString(Object.entries(parsed));
-    const webAppKey = await hmacSha256Bytes(new TextEncoder().encode("WebAppData"), botToken);
-    const expectedHash = toHex(await hmacSha256Bytes(webAppKey, dataCheckString));
-
-    return expectedHash === parsed.hash;
-}
-
-function getWebAppUserId(initData: string): string | null {
-    const parsed = parseInitData(initData);
-    const rawUser = parsed.user;
-    if (!rawUser) return null;
-    try {
-        const user = JSON.parse(rawUser);
-        if (!user || typeof user.id !== "number") return null;
-        return String(user.id);
-    } catch {
-        return null;
-    }
-}
-
-async function verifyLoginWidgetData(
-    userData: {
-        id: number;
-        first_name: string;
-        last_name?: string;
-        username?: string;
-        photo_url?: string;
-        auth_date?: number;
-        hash?: string;
-    },
-    botToken: string
-): Promise<boolean> {
-    if (!userData.hash || !userData.auth_date) return false;
-    if (!isAuthFresh(userData.auth_date)) return false;
-
-    const entries: Array<[string, string]> = [
-        ["id", String(userData.id)],
-        ["first_name", userData.first_name],
-    ];
-    if (userData.last_name) entries.push(["last_name", userData.last_name]);
-    if (userData.username) entries.push(["username", userData.username]);
-    if (userData.photo_url) entries.push(["photo_url", userData.photo_url]);
-    entries.push(["auth_date", String(userData.auth_date)]);
-
-    const dataCheckString = buildDataCheckString(entries);
-    const secretKey = await sha256Bytes(botToken);
-    const expectedHash = toHex(await hmacSha256Bytes(secretKey, dataCheckString));
-
-    return expectedHash === userData.hash;
-}
-
-export const login = mutation({
-    args: {
-        initData: v.string(), // The raw query string from Telegram
-        userData: v.object({
-            id: v.number(),
-            first_name: v.string(),
-            last_name: v.optional(v.string()),
-            username: v.optional(v.string()),
-            photo_url: v.optional(v.string()),
-            auth_date: v.optional(v.number()),
-            hash: v.optional(v.string()),
-        }),
-    },
-    handler: async (ctx, args) => {
-        // Rate limit login attempts per Telegram user ID
-        const userKey = String(args.userData.id);
-        await rateLimiter.limit(ctx, "login", { key: userKey, throws: true });
-
+export const login = action({
+    args: loginArgs,
+    handler: async (ctx, args): Promise<Doc<"users"> & { sessionToken: string }> => {
+        // Commit the attempt separately so a failed login cannot roll it back.
+        await ctx.runMutation(internal.rateLimitActions.checkLoginLimit, { key: String(args.userData.id) });
         const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        const allowInsecure = process.env.ALLOW_INSECURE_TELEGRAM_AUTH === "true";
+        if (!botToken) throw new Error("Telegram auth is not configured");
+        const verifiedUser = await authenticateTelegram(args.initData, args.userData, botToken);
+        if (!verifiedUser) throw new Error("Invalid Telegram authentication");
+        return await ctx.runMutation(internal.users.completeLogin, { userData: verifiedUser });
+    },
+});
 
-        if (!botToken && !allowInsecure) {
-            throw new Error("Telegram auth is not configured");
-        }
-
-        if (!allowInsecure) {
-            let verified = false;
-
-            if (botToken && args.initData && args.initData.includes("=")) {
-                verified = await verifyWebAppInitData(args.initData, botToken);
-                if (verified) {
-                    const initDataUserId = getWebAppUserId(args.initData);
-                    if (initDataUserId && initDataUserId !== String(args.userData.id)) {
-                        verified = false;
-                    }
-                }
-            }
-
-            if (!verified && botToken) {
-                verified = await verifyLoginWidgetData(args.userData, botToken);
-            }
-
-            if (!verified) {
-                // Track failed login for stricter rate limiting
-                await rateLimiter.limit(ctx, "failedLogin", { key: userKey });
-                throw new Error("Invalid Telegram authentication");
-            }
-        }
-
-        const tokenIdentifier = args.userData.id.toString();
-        const username = args.userData.username;
+export const completeLogin = internalMutation({
+    args: { userData: loginArgs.userData },
+    handler: async (ctx, { userData: verifiedUser }) => {
+        const tokenIdentifier = verifiedUser.id.toString();
+        const username = verifiedUser.username;
 
         // Check if user exists
         const existingUser = await ctx.db
@@ -228,7 +98,7 @@ export const login = mutation({
                     .collect();
 
                 for (const s of byUsername) {
-                    if (!studentsToLink.find(existing => existing._id === s._id)) {
+                    if ((!s.telegram_id || s.telegram_id === tokenIdentifier) && !studentsToLink.find(existing => existing._id === s._id)) {
                         studentsToLink.push(s);
                     }
                 }
@@ -244,8 +114,8 @@ export const login = mutation({
         }
 
         if (existingUser) {
-            const updates: { username?: string; studentId?: (typeof studentsToLink)[number]["_id"] } = {};
-            if (username && existingUser.username !== username) updates.username = username;
+            const updates: { username?: string; telegramUsernameVerified: boolean; studentId?: (typeof studentsToLink)[number]["_id"] } = { telegramUsernameVerified: true };
+            if (existingUser.username !== username) updates.username = username;
             if (!existingUser.studentId && studentsToLink.length > 0) updates.studentId = studentsToLink[0]._id;
 
             let finalUser = existingUser;
@@ -262,8 +132,9 @@ export const login = mutation({
         // 3. Create new user
         const userId = await ctx.db.insert("users", {
             tokenIdentifier,
-            name: args.userData.first_name,
+            name: verifiedUser.first_name,
             username: username,
+            telegramUsernameVerified: true,
             role: "student",
             studentId: studentsToLink.length > 0 ? studentsToLink[0]._id : undefined,
         });
@@ -276,30 +147,28 @@ export const login = mutation({
     },
 });
 
-export const backdoorLogin = mutation({
+export const backdoorLogin = action({
     args: {
         accessSecret: v.string(),
         targetTelegramId: v.number(),
     },
-    handler: async (ctx, args) => {
+    handler: async (ctx, args): Promise<Doc<"users"> & { sessionToken: string }> => {
         if (process.env.ALLOW_BACKDOOR_LOGIN !== "true") {
             throw new Error("Backdoor login is disabled");
         }
+        await ctx.runMutation(internal.rateLimitActions.checkBackdoorLoginLimit, {});
         const expectedSecret = process.env.BACKDOOR_LOGIN_SECRET;
-        if (!expectedSecret) {
-            throw new Error("Backdoor login is not configured");
+        if (!expectedSecret || expectedSecret.length < 32) {
+            throw new Error("Backdoor login requires a secret of at least 32 characters");
         }
+        if (!safeEqual(args.accessSecret, expectedSecret)) throw new Error("Invalid backdoor credentials");
+        return await ctx.runMutation(internal.users.completeBackdoorLogin, { targetTelegramId: args.targetTelegramId });
+    },
+});
 
-        const isSecretValid = safeEqual(args.accessSecret, expectedSecret);
-        if (!isSecretValid) {
-            // Strict rate limit on failed backdoor login attempts — 3 attempts per hour.
-            await rateLimiter.limit(ctx, "backdoorLogin", {
-                key: String(args.targetTelegramId),
-                throws: true,
-            });
-            throw new Error("Invalid backdoor credentials");
-        }
-
+export const completeBackdoorLogin = internalMutation({
+    args: { targetTelegramId: v.number() },
+    handler: async (ctx, args) => {
         const tokenIdentifier = String(args.targetTelegramId);
         const user = await ctx.db
             .query("users")
@@ -346,7 +215,11 @@ export const updateProfile = mutation({
         }),
     },
     handler: async (ctx, args) => {
-        await getUser(ctx, args.userId, args.authToken);
-        await ctx.db.patch(args.userId, args.updates);
+        const user = await getUser(ctx, args.userId, args.authToken);
+        const { username, ...profile } = args.updates;
+        if (username !== undefined && username !== user.username) {
+            throw new Error("Telegram username can only change through verified Telegram login");
+        }
+        await ctx.db.patch(args.userId, profile);
     },
 });

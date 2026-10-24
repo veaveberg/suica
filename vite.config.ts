@@ -9,7 +9,7 @@ export default defineConfig({
   base: '/',
   server: {
     https: {},
-    host: true, // Allow access from mobile devices on same network
+    host: '127.0.0.1',
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

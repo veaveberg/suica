@@ -1,7 +1,7 @@
 import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { verifySessionToken } from "./session";
 
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 export async function getUser(
     ctx: QueryCtx | MutationCtx,
@@ -43,4 +43,20 @@ export async function ensureTeacher(ctx: QueryCtx | MutationCtx, userId: Id<"use
 export async function ensureTeacherOrStudent(ctx: QueryCtx | MutationCtx, userId: Id<"users">, authToken: string) {
     const user = await getUser(ctx, userId, authToken);
     return user;
+}
+
+// Check referenced records too: authenticating a teacher does not authorize
+// access to another teacher's lesson, student, group, pass, or schedule.
+type OwnedTable = "groups" | "students" | "lessons" | "schedules" | "passes" | "tariffs";
+
+export async function ensureOwnedRecord(
+    ctx: QueryCtx | MutationCtx,
+    user: Doc<"users">,
+    id: Id<OwnedTable>,
+) {
+    const record = await ctx.db.get(id);
+    if (!record || (record.userId !== user.tokenIdentifier && user.role !== "admin")) {
+        throw new Error("Unauthorized");
+    }
+    return record;
 }

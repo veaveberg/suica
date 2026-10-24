@@ -1,4 +1,9 @@
 import type { ExternalCalendar, ExternalEvent } from '../types';
+import { convex } from '../convex-client';
+import { api } from '../../convex/_generated/api';
+import { getAuthToken, getAuthUserId } from '../auth-store';
+import { calendarSourceUrl } from '../../convex/calendarSource';
+import type { Id } from '../../convex/_generated/dataModel';
 
 // Helper to get UTC offset for a timezone at a specific date
 function getTimeZoneOffset(date: Date, timeZone: string): number {
@@ -252,83 +257,48 @@ export function parseICalFeed(icsContent: string, calendarName?: string, calenda
     return events;
 }
 
-// Try a direct request first: several calendar publishers (including some iCloud
-// feeds) permit it, which avoids depending on a third-party proxy. The remaining
-// options run concurrently because an unavailable proxy must not delay the
-// calendar while the next one is tried.
-const CALENDAR_FETCH_TIMEOUT_MS = 6_000;
-const CALENDAR_FETCH_SOURCES = [
-    (url: string) => url,
-    (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://proxy.cors.sh/${url}`,
-    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
-];
-
-// Deduplication map to prevent multiple concurrent fetches of the same URL
+// Private feed URLs must never be sent to public CORS proxy services.
+// Try the publisher directly, then our authenticated Convex relay.
 const pendingFetches = new Map<string, Promise<ExternalEvent[] | null>>();
 
-// Fetch and parse an iCal feed
-// Returns null if all proxies fail
 export async function fetchExternalCalendar(calendar: ExternalCalendar): Promise<ExternalEvent[] | null> {
-    const originalUrl = calendar.url.replace(/^webcal:\/\//i, 'https://');
-
-    // Add cache-busting but round to 5 minutes to avoid spamming proxies and allow their internal caching
-    const fiveMinutesMins = 5 * 60 * 1000;
-    const roundedTime = Math.floor(Date.now() / fiveMinutesMins) * fiveMinutesMins;
-    const separator = originalUrl.includes('?') ? '&' : '?';
-    const cacheBusterUrl = `${originalUrl}${separator}_t=${roundedTime}`;
-
-    if (pendingFetches.has(cacheBusterUrl)) {
-        return pendingFetches.get(cacheBusterUrl)!;
-    }
-
+    const key = `${getAuthUserId()}:${calendar.id}:${calendar.url}`;
+    const pending = pendingFetches.get(key);
+    if (pending) return pending;
     const fetchPromise = (async () => {
-        const abortController = new AbortController();
-        const timeoutId = window.setTimeout(() => abortController.abort(), CALENDAR_FETCH_TIMEOUT_MS);
-
         try {
-            const events = await new Promise<ExternalEvent[] | null>(resolve => {
-                let remainingRequests = CALENDAR_FETCH_SOURCES.length;
-
-                for (const makeSourceUrl of CALENDAR_FETCH_SOURCES) {
-                    void fetch(makeSourceUrl(cacheBusterUrl), {
-                        headers: { 'Accept': 'text/calendar, text/plain, */*' },
-                        signal: abortController.signal,
-                    })
-                        .then(async response => {
-                            if (!response.ok) return null;
-                            const icsContent = await response.text();
-                            if (!icsContent.includes('BEGIN:VCALENDAR')) return null;
-                            return parseICalFeed(icsContent, calendar.name, calendar.color, calendar.id);
-                        })
-                        .catch(() => null)
-                        .then(eventsFromSource => {
-                            if (eventsFromSource !== null) {
-                                abortController.abort();
-                                resolve(eventsFromSource);
-                                return;
-                            }
-
-                            remainingRequests -= 1;
-                            if (remainingRequests === 0) resolve(null);
-                        });
-                }
+            const url = calendarSourceUrl(calendar.url);
+            const response = await fetch(url, {
+                headers: { Accept: 'text/calendar' },
+                credentials: 'omit',
+                referrerPolicy: 'no-referrer',
+                signal: AbortSignal.timeout(6_000),
             });
-
-            return events;
-        } finally {
-            window.clearTimeout(timeoutId);
+            if (response.ok) {
+                const body = await response.text();
+                if (body.includes('BEGIN:VCALENDAR')) return parseICalFeed(body, calendar.name, calendar.color, calendar.id);
+            }
+        } catch {
+            // A publisher without browser CORS support can use the private relay.
+        }
+        const userId = getAuthUserId();
+        const authToken = getAuthToken();
+        if (!userId || !authToken) return null;
+        try {
+            const body = await convex.action(api.calendarFeeds.fetchFeed, {
+                userId,
+                authToken,
+                calendarId: calendar.id as Id<'external_calendars'>,
+            });
+            return parseICalFeed(body, calendar.name, calendar.color, calendar.id);
+        } catch {
+            return null;
         }
     })();
-
-    pendingFetches.set(cacheBusterUrl, fetchPromise);
-
-    // Clean up after it's done (with a small delay to catch near-simultaneous calls)
-    fetchPromise.finally(() => {
-        setTimeout(() => pendingFetches.delete(cacheBusterUrl), 2000);
+    pendingFetches.set(key, fetchPromise);
+    void fetchPromise.finally(() => {
+        setTimeout(() => pendingFetches.delete(key), 2_000);
     });
-
     return fetchPromise;
 }
 

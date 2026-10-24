@@ -153,8 +153,8 @@ export function calculateRevenuePerLesson(
         }
 
         if (coveredBy) {
-            let cost = 0;
-            let equation = "";
+            let cost: number;
+            let equation: string;
 
             const isAttended = attendanceRecord?.status === 'present';
             const consumesPass = shouldUsePassForAttendance(coveredBy, attendanceRecord?.status);

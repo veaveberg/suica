@@ -15,3 +15,18 @@ export const checkCalendarExportLimit = internalMutation({
         });
     },
 });
+
+export const checkLoginLimit = internalMutation({
+    args: { key: v.string() },
+    handler: async (ctx, { key }) => {
+        await rateLimiter.limit(ctx, "login", { key, throws: true });
+    },
+});
+
+export const checkBackdoorLoginLimit = internalMutation({
+    args: {},
+    handler: async (ctx) => {
+        // One budget for the endpoint. Changing the target ID cannot reset it.
+        await rateLimiter.limit(ctx, "backdoorLogin", { key: "global", throws: true });
+    },
+});

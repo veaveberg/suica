@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Plus, Instagram, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, Calendar, XCircle, CheckCircle2, Check } from 'lucide-react';
+import { X, Plus, ChevronDown, ChevronUp, Trash2, Archive, RotateCcw, Calendar, XCircle, CheckCircle2, Check } from 'lucide-react';
 import type { Subscription, Student, Lesson, AttendanceStatus, CurrentAttendanceStatus } from '../types';
 import { SubscriptionDetailSheet } from './SubscriptionDetailSheet';
 import { LessonDetailSheet } from './LessonDetailSheet';
@@ -11,7 +11,7 @@ import * as api from '../api';
 import { calculateStudentGroupBalance, calculateStudentGroupBalanceWithAudit } from '../utils/balance';
 import type { BalanceAuditEntry, AuditReason } from '../utils/balance';
 import { getConsecutiveSubscriptionExpiration } from '../utils/subscriptionDates';
-import { TelegramIcon } from './Icons';
+import { Instagram, TelegramIcon } from './Icons';
 import { cn } from '../utils/cn';
 import { formatDate, formatDateRange, formatTimeRange } from '../utils/formatting';
 import { getPassDisplayName } from '../utils/passUtils';

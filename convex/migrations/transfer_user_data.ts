@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 
-export const transfer = mutation({
+export const transfer = internalMutation({
     args: {
         fromToken: v.string(),
         toToken: v.string(),

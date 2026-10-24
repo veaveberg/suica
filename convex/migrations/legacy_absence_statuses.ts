@@ -1,8 +1,8 @@
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 
-export const renameCurrentAbsencesToLegacy = mutation({
+export const renameCurrentAbsencesToLegacy = internalMutation({
     args: {},
     handler: async (ctx) => {
         const records = await ctx.db.query("attendance").collect();
@@ -28,7 +28,7 @@ export const renameCurrentAbsencesToLegacy = mutation({
     },
 });
 
-export const recalculateAttendanceById = mutation({
+export const recalculateAttendanceById = internalMutation({
     args: {
         attendanceId: v.id("attendance"),
     },

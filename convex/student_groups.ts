@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { ensureOwnedRecord, ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 
 export const get = query({
     args: { userId: v.id("users"), authToken: v.string() },
@@ -60,6 +60,8 @@ export const create = mutation({
     },
     handler: async (ctx, args) => {
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
+        await ensureOwnedRecord(ctx, user, args.student_id);
+        await ensureOwnedRecord(ctx, user, args.group_id);
 
         // check if exists
         const existing = await ctx.db

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
+import { internalMutation } from "../_generated/server";
 
-export const copy = mutation({
+export const copy = internalMutation({
     args: {
         fromUserId: v.string(), // e.g. "129516266"
         toUserId: v.string(),   // e.g. "606365821"

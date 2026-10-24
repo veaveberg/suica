@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { X, Instagram } from 'lucide-react';
-import { TelegramIcon } from './Icons';
+import { X } from 'lucide-react';
+import { Instagram, TelegramIcon } from './Icons';
 import { getAuthToken } from '../auth-store';
 
 interface ProfileDetailSheetProps {
@@ -21,7 +21,6 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
     const updateProfile = useMutation(api.users.updateProfile);
 
     const [name, setName] = useState('');
-    const [tgUsername, setTgUsername] = useState('');
     const [igUsername, setIgUsername] = useState('');
     const [isShaking, setIsShaking] = useState(false);
     const isDirtyRef = useRef(false);
@@ -29,7 +28,6 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
     useEffect(() => {
         if (user && isOpen) {
             setName(user.name || '');
-            setTgUsername(user.username || '');
             setIgUsername(user.instagram_username || '');
             isDirtyRef.current = false;
         }
@@ -45,7 +43,6 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
             authToken,
             updates: {
                 name: name.trim() || undefined,
-                username: tgUsername.replace(/@/g, '').trim() || undefined,
                 instagram_username: igUsername.replace(/@/g, '').trim() || undefined,
             }
         });
@@ -63,7 +60,6 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
                     }
 
                     const hasChanges = name.trim() !== (user.name || '') ||
-                        tgUsername.replace(/@/g, '').trim() !== (user.username || '') ||
                         igUsername.replace(/@/g, '').trim() !== (user.instagram_username || '');
 
                     if (hasChanges) {
@@ -110,8 +106,8 @@ export const ProfileDetailSheet: React.FC<ProfileDetailSheetProps> = ({
                             <TelegramIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ios-gray" />
                             <input
                                 type="text"
-                                value={tgUsername}
-                                onChange={(e) => { setTgUsername(e.target.value); isDirtyRef.current = true; }}
+                                value={user.username || ''}
+                                readOnly
                                 className="w-full pl-9 px-3 py-2 rounded-xl bg-ios-background dark:bg-zinc-800 dark:text-white text-sm"
                                 placeholder="username"
                             />

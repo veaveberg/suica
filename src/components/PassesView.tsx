@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, CreditCard, Instagram } from 'lucide-react';
+import { Plus, CreditCard } from 'lucide-react';
 import { useTelegram } from './TelegramProvider';
 import { useData } from '../DataProvider';
-import { TelegramIcon } from './Icons';
+import { Instagram, TelegramIcon } from './Icons';
 import { PassDetailSheet } from './PassDetailSheet';
 import { PassCard } from './PassCard';
 

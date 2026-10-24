@@ -1,6 +1,7 @@
+import { Instagram } from './Icons';
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, AtSign, Instagram } from 'lucide-react';
+import { X, AtSign } from 'lucide-react';
 import type { Student } from '../types';
 import { useData } from '../DataProvider';
 import * as api from '../api';

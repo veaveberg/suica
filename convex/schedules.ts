@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { ensureOwnedRecord, ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 import { rateLimiter } from "./rateLimits";
 
 export const get = query({
@@ -92,6 +92,7 @@ export const create = mutation({
     handler: async (ctx, args) => {
         await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
+        await ensureOwnedRecord(ctx, user, args.group_id);
 
         return await ctx.db.insert("schedules", {
             group_id: args.group_id,

@@ -1,6 +1,6 @@
 import { useEffect, useState, createContext, useContext, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useMutation, useQuery } from 'convex/react';
+import { useAction, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { setAuthUser, getAuthRole, clearAuthUser, getAuthUserId, getAuthToken, getAuthTokenExpiresAt, isAuthTokenExpired } from '../auth-store';
 
@@ -92,8 +92,8 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
         convexUser?: { _id: string, role: string, tokenIdentifier?: string };
     }>({});
 
-    const login = useMutation(api.users.login);
-    const backdoorLoginMutation = useMutation((api.users as any).backdoorLogin);
+    const login = useAction(api.users.login);
+    const backdoorLoginMutation = useAction(api.users.backdoorLogin);
 
     const clearSessionExpiryTimer = useCallback(() => {
         if (sessionExpiryTimerRef.current !== null) {
@@ -137,14 +137,12 @@ export function TelegramProvider({ children }: TelegramProviderProps) {
     }, [clearSessionExpiryTimer, markSessionExpired]);
 
     const onAuth = useCallback(async (tgUser: any) => {
-        console.log("[TelegramAuth] Callback received from widget:", tgUser);
         setAuthError(undefined);
         try {
             const user = await login({
                 initData: "login_widget", // We flag this for backend to know it's a widget login
                 userData: tgUser
             });
-            console.log("[TelegramAuth] Convex login mutation result:", user);
             if (user) {
                 if (!user.sessionToken) {
                     throw new Error("Login did not return a session token");

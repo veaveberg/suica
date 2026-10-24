@@ -69,7 +69,7 @@ export const create = mutation({
                 .withIndex("by_username", (q) => q.eq("username", args.telegram_username))
                 .first();
 
-            if (existingUser) {
+            if (existingUser?.telegramUsernameVerified) {
                 telegram_id = existingUser.tokenIdentifier;
             }
         }
@@ -131,7 +131,7 @@ export const update = mutation({
                 .withIndex("by_username", (q) => q.eq("username", patch.telegram_username))
                 .first();
 
-            if (existingUser) {
+            if (existingUser?.telegramUsernameVerified) {
                 patch.telegram_id = existingUser.tokenIdentifier;
             }
         } else if (args.updates.telegram_username !== undefined) {

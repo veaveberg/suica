@@ -10,16 +10,25 @@
 
 import type * as attendance from "../attendance.js";
 import type * as balance_logic from "../balance_logic.js";
+import type * as bot from "../bot.js";
+import type * as botLanguage from "../botLanguage.js";
+import type * as botValidators from "../botValidators.js";
+import type * as calendarFeeds from "../calendarFeeds.js";
+import type * as calendarSource from "../calendarSource.js";
 import type * as calendars from "../calendars.js";
 import type * as crons from "../crons.js";
 import type * as groups from "../groups.js";
 import type * as http from "../http.js";
+import type * as lessonReminders from "../lessonReminders.js";
 import type * as lessons from "../lessons.js";
 import type * as migrations_copy_groups_schedules from "../migrations/copy_groups_schedules.js";
 import type * as migrations_legacy_absence_statuses from "../migrations/legacy_absence_statuses.js";
 import type * as migrations_provision_pickme_kontora from "../migrations/provision_pickme_kontora.js";
+import type * as migrations_reminderLifecycleCheck from "../migrations/reminderLifecycleCheck.js";
 import type * as migrations_transfer_user_data from "../migrations/transfer_user_data.js";
 import type * as my_http from "../my_http.js";
+import type * as notificationLogic from "../notificationLogic.js";
+import type * as notifications from "../notifications.js";
 import type * as pass_groups from "../pass_groups.js";
 import type * as passes from "../passes.js";
 import type * as permissions from "../permissions.js";
@@ -39,6 +48,7 @@ import type * as student_groups from "../student_groups.js";
 import type * as students from "../students.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as tariffs from "../tariffs.js";
+import type * as telegramAuth from "../telegramAuth.js";
 import type * as users from "../users.js";
 
 import type {
@@ -50,16 +60,25 @@ import type {
 declare const fullApi: ApiFromModules<{
   attendance: typeof attendance;
   balance_logic: typeof balance_logic;
+  bot: typeof bot;
+  botLanguage: typeof botLanguage;
+  botValidators: typeof botValidators;
+  calendarFeeds: typeof calendarFeeds;
+  calendarSource: typeof calendarSource;
   calendars: typeof calendars;
   crons: typeof crons;
   groups: typeof groups;
   http: typeof http;
+  lessonReminders: typeof lessonReminders;
   lessons: typeof lessons;
   "migrations/copy_groups_schedules": typeof migrations_copy_groups_schedules;
   "migrations/legacy_absence_statuses": typeof migrations_legacy_absence_statuses;
   "migrations/provision_pickme_kontora": typeof migrations_provision_pickme_kontora;
+  "migrations/reminderLifecycleCheck": typeof migrations_reminderLifecycleCheck;
   "migrations/transfer_user_data": typeof migrations_transfer_user_data;
   my_http: typeof my_http;
+  notificationLogic: typeof notificationLogic;
+  notifications: typeof notifications;
   pass_groups: typeof pass_groups;
   passes: typeof passes;
   permissions: typeof permissions;
@@ -79,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   students: typeof students;
   subscriptions: typeof subscriptions;
   tariffs: typeof tariffs;
+  telegramAuth: typeof telegramAuth;
   users: typeof users;
 }>;
 
@@ -109,138 +129,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  rateLimiter: {
-    lib: {
-      checkRateLimit: FunctionReference<
-        "query",
-        "internal",
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: null;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          count?: number;
-          key?: string;
-          name: string;
-          reserve?: boolean;
-          throws?: boolean;
-        },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-      >;
-      clearAll: FunctionReference<
-        "mutation",
-        "internal",
-        { before?: number },
-        null
-      >;
-      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
-      getValue: FunctionReference<
-        "query",
-        "internal",
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: null;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          key?: string;
-          name: string;
-          sampleShards?: number;
-        },
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: null;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          shard: number;
-          ts: number;
-          value: number;
-        }
-      >;
-      rateLimit: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          config:
-            | {
-                capacity?: number;
-                kind: "token bucket";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: null;
-              }
-            | {
-                capacity?: number;
-                kind: "fixed window";
-                maxReserved?: number;
-                period: number;
-                rate: number;
-                shards?: number;
-                start?: number;
-              };
-          count?: number;
-          key?: string;
-          name: string;
-          reserve?: boolean;
-          throws?: boolean;
-        },
-        { ok: true; retryAfter?: number } | { ok: false; retryAfter: number }
-      >;
-      resetRateLimit: FunctionReference<
-        "mutation",
-        "internal",
-        { key?: string; name: string },
-        null
-      >;
-    };
-    time: {
-      getServerTime: FunctionReference<"mutation", "internal", {}, number>;
-    };
-  };
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
 };

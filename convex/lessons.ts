@@ -1,7 +1,8 @@
 
+import { createScheduledLesson, updateScheduledLesson, deleteScheduledLesson } from "./lessonReminders";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ensureTeacher, ensureTeacherOrStudent } from "./permissions";
+import { ensureOwnedRecord, ensureTeacher, ensureTeacherOrStudent } from "./permissions";
 import { rateLimiter } from "./rateLimits";
 
 export const get = query({
@@ -96,8 +97,10 @@ export const create = mutation({
     handler: async (ctx, args) => {
         await rateLimiter.limit(ctx, "mutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
+        await ensureOwnedRecord(ctx, user, args.group_id);
+        if (args.schedule_id) await ensureOwnedRecord(ctx, user, args.schedule_id);
 
-        return await ctx.db.insert("lessons", {
+        return await createScheduledLesson(ctx, {
             group_id: args.group_id,
             date: args.date,
             time: args.time,
@@ -139,7 +142,8 @@ export const update = mutation({
             throw new Error("Unauthorized");
         }
 
-        await ctx.db.patch(args.id, args.updates);
+        if (args.updates.schedule_id) await ensureOwnedRecord(ctx, user, args.updates.schedule_id);
+        await updateScheduledLesson(ctx, args.id, args.updates);
     },
 });
 
@@ -159,7 +163,7 @@ export const remove = mutation({
             throw new Error("Unauthorized");
         }
 
-        await ctx.db.delete(args.id);
+        await deleteScheduledLesson(ctx, lesson);
     },
 });
 
@@ -185,7 +189,9 @@ export const bulkCreate = mutation({
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
 
         for (const lesson of args.lessons) {
-            await ctx.db.insert("lessons", {
+            await ensureOwnedRecord(ctx, user, lesson.group_id);
+            if (lesson.schedule_id) await ensureOwnedRecord(ctx, user, lesson.schedule_id);
+            await createScheduledLesson(ctx, {
                 ...lesson,
                 userId: user.tokenIdentifier,
                 students_count: lesson.students_count || 0,
@@ -208,6 +214,7 @@ export const generateMore = mutation({
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
         const group = await ctx.db.get(args.groupId);
         if (!group) return;
+        await ensureOwnedRecord(ctx, user, args.groupId);
 
         // Get schedules
         const schedules = await ctx.db
@@ -294,7 +301,7 @@ export const generateMore = mutation({
         }
 
         for (const l of newLessons) {
-            await ctx.db.insert("lessons", l);
+            await createScheduledLesson(ctx, l);
         }
     }
 });
@@ -310,6 +317,7 @@ export const syncFromSchedule = mutation({
     handler: async (ctx, args) => {
         await rateLimiter.limit(ctx, "bulkMutate", { key: args.userId, throws: true });
         const user = await ensureTeacher(ctx, args.userId, args.authToken);
+        if (args.groupId) await ensureOwnedRecord(ctx, user, args.groupId);
 
         const groupsToSync = args.groupId
             ? [await ctx.db.get(args.groupId)]
@@ -392,7 +400,7 @@ export const syncFromSchedule = mutation({
                 if (i < existingLessons.length) {
                     // Update existing lesson
                     const lesson = existingLessons[i];
-                    await ctx.db.patch(lesson._id, {
+                    await updateScheduledLesson(ctx, lesson._id, {
                         date: slot.date,
                         time: slot.time,
                         duration_minutes: slot.duration,
@@ -400,7 +408,7 @@ export const syncFromSchedule = mutation({
                     });
                 } else {
                     // Create new lesson
-                    await ctx.db.insert("lessons", {
+                    await createScheduledLesson(ctx, {
                         group_id: group._id,
                         userId: user.tokenIdentifier,
                         date: slot.date,
