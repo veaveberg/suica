@@ -115,7 +115,7 @@ export function PublicSpacePage({ publicToken }: { publicToken: string }) {
     if (space === null) return <div className="flex min-h-screen items-center justify-center bg-ios-background px-6 text-center text-sm text-ios-gray dark:bg-black">{t('space_calendar_unavailable')}</div>;
 
     return <div className="flex h-[100dvh] flex-col overflow-hidden bg-ios-background dark:bg-black">
-        <header className="relative z-50 flex shrink-0 flex-col gap-2 border-b border-gray-200 bg-ios-card/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/90">
+        <header className="sticky top-0 z-50 flex shrink-0 flex-col gap-2 border-b border-gray-200 bg-ios-card px-4 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] dark:border-zinc-800 dark:bg-zinc-900">
             <div className="flex items-center justify-between gap-2">
                 <img src={publicAssetUrl(space.logoPath)} alt={space.name} className="h-8 w-[148px] shrink-0 object-contain object-left" />
                 <div className="flex shrink-0 items-center gap-2">

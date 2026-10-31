@@ -138,8 +138,8 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
         )}>
             {/* Header with Settings */}
             <header
-                className={cn("shrink-0 z-40 p-4 bg-ios-card/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-zinc-800", activeTab === 'calendar' ? 'flex flex-col gap-2' : 'flex items-center justify-between')}
-                style={{ paddingTop: 'max(1rem, var(--safe-area-inset-top))' }}
+                className={cn("sticky top-0 shrink-0 z-40 px-4 py-2 bg-ios-card dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800", activeTab === 'calendar' ? 'flex flex-col gap-2' : 'flex items-center justify-between')}
+                style={{ paddingTop: 'max(0.5rem, var(--safe-area-inset-top))' }}
             >
                 {activeTab === 'calendar' && calendarSource.kind === 'space' ? <>
                     <div className="flex min-w-0 items-center justify-between gap-2">
@@ -223,7 +223,7 @@ export const TeacherApp: React.FC<TeacherAppProps> = ({
                     isStudentGlobal ? "grid-cols-4" : "grid-cols-5"
                 )}
                 style={{
-                    paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+                    paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
                     paddingTop: '8px',
                     minHeight: 'calc(50px + env(safe-area-inset-bottom))'
                 }}
