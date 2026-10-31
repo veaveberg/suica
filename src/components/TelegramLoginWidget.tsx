@@ -83,6 +83,12 @@ export const TelegramLoginWidget: React.FC<TelegramLoginWidgetProps> = ({
     }, [botName, buttonSize, cornerRadius, requestAccess, usePic, lang]); // Removed onAuth from dependency to avoid remounts
 
     return (
-        <div ref={containerRef} className={className} />
+        <div className={className}>
+            <div
+                ref={containerRef}
+                className="inline-flex overflow-hidden"
+                style={{ borderRadius: cornerRadius }}
+            />
+        </div>
     );
 };
